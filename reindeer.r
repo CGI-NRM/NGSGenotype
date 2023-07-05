@@ -1,24 +1,24 @@
 library(ShortRead)
 
-primerDF <- data.frame(NVHRT03 = c("TGGAGAGCTGAGTATGAAAG", "CTTTTAGGTAGCTGCATTTCT"), 
-                       NVHRT16 = c("ATTCTAAGCCCAAATAATCTT", "AAGACACAGACCCCTTAGA"), 
-                       NVHRT73 = c("CTTGCCCATTTAGTGTTTTCT", "CTCCTATTCAATGACACGCA"),
-                       NVHRT31 = c("CATCCCAAAGTTTACAGCAG", "GTGTCACTCAGGCCATAAAAA"),
-                       BM6506 = c("GCACCTGGTAAAGAGATGGC", "GTGCCATGCTCAAGTTGCT"),
-                       RT9 = c("TGAAGTTTAATTTCCACTCT", "ATGTGGGATGAAAGTGACTG"),
-                       NVHRT01 = c("GCAGTCTTCCCCTTTCTT", "TAGTGTCCAACTCTGCAATC"),
-                       OheQ = c("AGACCTGATTACAATGTGTCAGTGAAGGTCTTC", "CTAGATGGTTGCCTGGATGGGTCCATC"),
-                       DeerC89 = c("AGAGCCTCGTCTTTTCATTC", "TTAGACAAGCAAGCAGCAAA"),
-                       NVHRT66 = c("GCAGAGTCCGTGGGATTG", "ATAAGCCAAGCTGCCTCCAA"),
-                       BM4513 = c("GCGCAAGTTTCCTCATGC", "GGGTGATGTACTGAATTGCTGA"),
-                       NVHRT48 = c("CGTGAATCTTAACCAGGTCT", "GTTTCTAAATGAAGCTGACC"),
-                       RT27 = c("CCAAAGACCCAACAGATG", "AATGCTTTTGCTGTGTTACAA"),
-                       RT30 = c("CACTTGGCTTTTGGACTTA", "AGTGTGCATACATACACCAG"),
-                       RT7 = c("CCTGTTCTACTCTTCTTCTC", "AACCAGTGCCCGTGAAAAGT"),
-                       RT1 = c("TGCCTTCTTTCATCCAACAA", "GTAAAGAGGATGGGAAGATG"),
-                       OarFCB193 = c("TTCATCTCAGACTGGGATTCAGAAAGGC", "GGGATGCAGGAGGGTTATTTCCAAGC"),
-                       MAF46 = c("CACCATGGCCACCTGGAATCAGG", "GTGGTACTGTGCCTTATAGGGTATTT"))
+ParsePrimers <- function(fastaFile) {
+  fastaString <- paste(readLines(fastaFile), collapse = "\n")
+  fastaList <- strsplit(fastaString, split = ">")
+  fastaList <- fastaList[[1]][fastaList[[1]] != ""]
+  newLineSplit <- function(inputLine) {
+    sequenceList <- strsplit(inputLine, split = "\n")[[1]]
+    nucSequence <- sequenceList[2:length(sequenceList)]
+    nucSequence <- paste(nucSequence, collapse = "")
+    sequenceList <- c(sequenceList[1], strsplit(nucSequence, "\\.\\.\\."))
+    sequenceDF <- data.frame(Primer = c(sequenceList[[2]][1], sequenceList[[2]][2]))
+    colnames(sequenceDF) <- sequenceList[[1]]
+    return(sequenceDF)
+  }
+  fastaDFList <- lapply(fastaList, newLineSplit)
+  fastaDF <- do.call("cbind", fastaDFList)
+  return(fastaDF)
+}
 
+primerDF <- ParsePrimers("./primers.fa")
 inputFiles <- list.files("./filtered2/", pattern = "*.fastq.gz")
 
 NameShortener <- function(name) {
