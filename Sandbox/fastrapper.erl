@@ -1,4 +1,5 @@
--module(bootstrapper).
+%%% Fastrapper: The FASTQ Bootstrapper
+-module(fastrapper).
 -export([file_reader/1, reader_worker/3, supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, test_readwrite/0, start/0]).
 
 %%% Functions for reading and writing:
@@ -41,7 +42,7 @@ mass_reader(File_folder) ->
 	Fq_paths = lists:map(fun(X) -> File_folder ++ "/" ++ X end, Fq_names),
 	io:fwrite("~p~n", [Fq_paths]),
 	
-	PID = spawn(bootstrapper, supervisor, [[], length(Fq_paths), self()]),
+	PID = spawn(fastrapper, supervisor, [[], length(Fq_paths), self()]),
 	worker_launcher(reader_worker, Fq_paths, 0, PID),
 	receive
 		{allParts, Package} ->
@@ -63,7 +64,7 @@ random_sampler(Population, Size, PID) ->
 	PID ! {part, [element(rand:uniform(Length), Pop_tuple) || _ <- lists:seq(1, Size)]}.
 
 make_sample(File_list, Sample_size) ->
-	PID = spawn(bootstrapper, supervisor, [[], length(File_list), self()]),
+	PID = spawn(fastrapper, supervisor, [[], length(File_list), self()]),
 	worker_launcher(random_sampler, File_list, Sample_size, PID),
 
 	receive
@@ -85,7 +86,7 @@ worker_launcher(_, [], _, _) ->
 	allSpawned;
 
 worker_launcher(Function, [H|T], Setting, PID) ->
-	spawn(bootstrapper, Function, [H, Setting, PID]),
+	spawn(fastrapper, Function, [H, Setting, PID]),
 	worker_launcher(Function, T, Setting, PID).
 
 %%% Test functions:
