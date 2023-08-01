@@ -19,7 +19,7 @@ ParsePrimers <- function(fastaFile) {
 }
 
 primerDF <- ParsePrimers("./primers.fa")
-inputFiles <- list.files("./filtered2/", pattern = "*.fastq.gz")
+inputFiles <- list.files("./Filtered_data/", pattern = "*.fastq.gz")
 
 NameShortener <- function(name) {
   # name <- substr(name, 1, 20)
@@ -38,9 +38,9 @@ inputFiles <- unique(inputFiles)
 
 FastqLoader <- function(fileName) {
   namePattern <- paste0(fileName, "*")
-  loadedFile <- readFastq(dirPath = "./filtered2/", pattern = namePattern)
+  loadedFile <- readFastq(dirPath = "./Filtered_data/", pattern = namePattern)
   print(paste("Searching for", namePattern))
-  print(list.files("./filtered2/", pattern = namePattern))
+  print(list.files("./Filtered_data/", pattern = namePattern))
   return(c(loadedFile, fileName))
 }
 
@@ -104,7 +104,7 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo) {
   return(outputDF)
 }
 
-test1 <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = "./plots/results_reindeer_gt.pdf", primerInfo = primerDF)
+test1 <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = "./Plots/results_reindeer_gt.pdf", primerInfo = primerDF)
 test2 <- t(test1)
 
 # sortera bort inkorrekta sekvenser av samma längd, längre distans än sekvensfel
