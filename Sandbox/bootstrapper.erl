@@ -1,5 +1,5 @@
 -module(bootstrapper).
--export([file_reader/1, sampling_supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, start/0]).
+-export([file_reader/1, sampling_supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, test_readwrite/0, start/0]).
 
 %%% Functions for reading and writing:
 file_reader(File_name) ->
@@ -15,6 +15,19 @@ tuplify([_], Output) ->
 
 tuplify([Row1, Row2, Row3, Row4|T], Output) ->
 	tuplify(T, [{Row1, Row2, Row3, Row4}|Output]).
+
+file_writer([], _) ->
+	allWritten;
+
+file_writer([{R1, R2, R3, R4}|T], Name) ->
+	file:write_file(Name, io_lib:fwrite("~s~n~s~n~s~n~s~n", [R1, R2, R3, R4]), [append]),
+	file_writer(T, Name).
+
+gzipper(Name) ->
+	{ok, File} = file:read_file(Name),
+	Gz_file = zlib:gzip(File),
+	file:write_file(Name ++ ".gz", Gz_file),
+	file:delete(Name).
 
 %%% Functions for sampling:
 sampling_supervisor(Package, 0, PID) ->
@@ -46,7 +59,6 @@ make_sample(File_list, Sample_size) ->
 		{allSamples, Package} ->
 			Package
 	end.
-%%%
 
 %%% Test functions:
 test_sampling() ->
@@ -55,16 +67,23 @@ test_sampling() ->
 	io:fwrite("~p~n", [Results]).
 
 test_reading() ->
-	List = file_reader("../rawdata/A148_1_FKDL230041387-1A_HVH5NDRX2_L2_1.fq.gz"),
+	List = file_reader("../Raw_data/S646_142_EKDL230001504-1A_HNHKMDSX5_L3_1.fq.gz"),
 	Tuplist = tuplify(List, []),
-	%io:fwrite("~p~n", [lists:nth(1, Tuplist)]).
 	Results = make_sample([Tuplist, Tuplist, Tuplist, Tuplist], 10000),
 	io:fwrite("~p~n", [Results]).
 
 test_writing() ->
-	todo.
+	Fake_file = [{"@Potato1", "AACTGTCACG", "+", "FFFFFFFFFF"}, {"@Potato2", "AACTGTCACG", "+", "FFFFFFFFFF"}, {"@Potato3", "AACTGTCACG", "+", "FFFFFFFFFF"}],
+	file_writer(Fake_file, "out.txt"),
+	gzipper("out.txt").
+
+test_readwrite() ->
+	List = file_reader("../Raw_data/S646_142_EKDL230001504-1A_HNHKMDSX5_L3_1.fq.gz"),
+	Tuplist = tuplify(List, []),
+	Results = make_sample([Tuplist], 10000),
+	file_writer(lists:nth(1, Results), "sample1.fq"),
+	gzipper("sample1.fq").
 
 %%% Start program:
 start() ->
 	ok.
-
