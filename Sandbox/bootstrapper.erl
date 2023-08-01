@@ -1,5 +1,5 @@
 -module(bootstrapper).
--export([file_reader/1, sampling_supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, test_readwrite/0, start/0]).
+-export([file_reader/1, reader_worker/3, supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, test_readwrite/0, start/0]).
 
 %%% Functions for reading and writing:
 file_reader(File_name) ->
@@ -29,36 +29,64 @@ gzipper(Name) ->
 	file:write_file(Name ++ ".gz", Gz_file),
 	file:delete(Name).
 
-%%% Functions for sampling:
-sampling_supervisor(Package, 0, PID) ->
-	PID ! {allSamples, Package};
+reader_worker(Path, _, PID) ->
+	File_list = file_reader(Path),
+	Tuplist = tuplify(File_list, []),
+	PID ! {part, Tuplist}.	
 
-sampling_supervisor(Package, Chunks, PID) ->
+mass_reader(File_folder) ->
+	{ok, File_names} = file:list_dir(File_folder),
+	Fq_tester = fun(X) -> (re:run(X, ".fq.gz", [{capture, none}]) == match) end,
+	Fq_names = lists:filter(Fq_tester, File_names),
+	Fq_paths = lists:map(fun(X) -> File_folder ++ "/" ++ X end, Fq_names),
+	io:fwrite("~p~n", [Fq_paths]),
+	
+	PID = spawn(bootstrapper, supervisor, [[], length(Fq_paths), self()]),
+	worker_launcher(reader_worker, Fq_paths, 0, PID),
 	receive
-		{part, Samples} ->
-			sampling_supervisor([Samples|Package], Chunks - 1, PID)
+		{allParts, Package} ->
+			Package
 	end.
 
+mass_writer([], _) ->
+	allWritten;
+
+mass_writer([File|File_tail], [Name|Name_tail]) ->
+	file_writer(File, Name),
+	gzipper(Name),
+	mass_writer(File_tail, Name_tail).
+
+%%% Functions for sampling:
 random_sampler(Population, Size, PID) ->
 	Length = length(Population),
 	Pop_tuple = list_to_tuple(Population), % Since indexing tuples are way faster
 	PID ! {part, [element(rand:uniform(Length), Pop_tuple) || _ <- lists:seq(1, Size)]}.
 
-worker_launcher([], _, _) ->
-	allSpawned;
-
-worker_launcher([H|T], Sample_size, PID) ->
-	spawn(bootstrapper, random_sampler, [H, Sample_size, PID]),
-	worker_launcher(T, Sample_size, PID).
-
 make_sample(File_list, Sample_size) ->
-	PID = spawn(bootstrapper, sampling_supervisor, [[], length(File_list), self()]),
-	worker_launcher(File_list, Sample_size, PID),
+	PID = spawn(bootstrapper, supervisor, [[], length(File_list), self()]),
+	worker_launcher(random_sampler, File_list, Sample_size, PID),
 
 	receive
-		{allSamples, Package} ->
+		{allParts, Package} ->
 			Package
 	end.
+
+%%% Functions for spawning:
+supervisor(Package, 0, PID) ->
+	PID ! {allParts, Package};
+
+supervisor(Package, Chunks, PID) ->
+	receive
+		{part, Part} ->
+			supervisor([Part|Package], Chunks - 1, PID)
+	end.
+
+worker_launcher(_, [], _, _) ->
+	allSpawned;
+
+worker_launcher(Function, [H|T], Setting, PID) ->
+	spawn(bootstrapper, Function, [H, Setting, PID]),
+	worker_launcher(Function, T, Setting, PID).
 
 %%% Test functions:
 test_sampling() ->
@@ -86,4 +114,10 @@ test_readwrite() ->
 
 %%% Start program:
 start() ->
+	File_folder = "../Raw_data",
+	File_list = mass_reader(File_folder),
+	Sample_list = make_sample(File_list, 10000),
+	mass_writer(Sample_list, [integer_to_list(X) ++ ".txt" || X <- lists:seq(1, length(Sample_list))]),
 	ok.
+	% todo: read, sample and write all files with forward and reverse synched
+	% todo: make the random sample file names correspond to the original
