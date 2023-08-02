@@ -30,10 +30,10 @@ gzipper(Name) ->
 	file:write_file(Name ++ ".gz", Gz_file),
 	file:delete(Name).
 
-reader_worker(Path, _, PID) ->
+reader_worker({Path, Name}, _, PID) ->
 	File_list = file_reader(Path),
 	Tuplist = tuplify(File_list, []),
-	PID ! {part, Tuplist}.	
+	PID ! {part, {Name, Tuplist}}.	
 
 mass_reader(File_folder) ->
 	{ok, File_names} = file:list_dir(File_folder),
@@ -43,24 +43,26 @@ mass_reader(File_folder) ->
 	io:fwrite("~p~n", [Fq_paths]),
 	
 	PID = spawn(fastrapper, supervisor, [[], length(Fq_paths), self()]),
-	worker_launcher(reader_worker, Fq_paths, 0, PID),
+	worker_launcher(reader_worker, lists:zip(Fq_paths, Fq_names), 0, PID),
 	receive
 		{allParts, Package} ->
 			Package
 	end.
 
-mass_writer([], _) ->
+mass_writer([]) ->
 	allWritten;
 
-mass_writer([File|File_tail], [Name|Name_tail]) ->
+mass_writer([{Name, File}|T]) ->
 	file_writer(File, Name),
 	gzipper(Name),
-	mass_writer(File_tail, Name_tail).
+	mass_writer(T).
 
 %%% Functions for sampling:
-random_sampler(Population, Size, PID) ->
+random_sampler({Name, Population}, Size, PID) ->
+	Short_name = Name -- ".fq.gz",
+	File_name = Short_name ++ "_" ++ integer_to_list(Size) ++ "_bootstraps.fq",
 	Length = tuple_size(Population),
-	PID ! {part, [element(rand:uniform(Length), Population) || _ <- lists:seq(1, Size)]}.
+	PID ! {part, {File_name, [element(rand:uniform(Length), Population) || _ <- lists:seq(1, Size)]}}.
 
 make_sample(File_list, Sample_size) ->
 	PID = spawn(fastrapper, supervisor, [[], length(File_list), self()]),
@@ -115,9 +117,9 @@ test_readwrite() ->
 %%% Start program:
 start() ->
 	File_folder = "../Raw_data",
+	Bootstraps = 10000,
 	File_list = mass_reader(File_folder),
-	Sample_list = make_sample(File_list, 10000),
-	mass_writer(Sample_list, [integer_to_list(X) ++ ".txt" || X <- lists:seq(1, length(Sample_list))]),
+	Sample_list = make_sample(File_list, Bootstraps),
+	mass_writer(Sample_list),
 	ok.
 	% todo: read, sample and write all files with forward and reverse synched
-	% todo: make the random sample file names correspond to the original
