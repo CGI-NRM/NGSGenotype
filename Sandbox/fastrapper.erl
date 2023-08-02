@@ -9,10 +9,10 @@ file_reader(File_name) ->
 	binary:split(Inflated_data, [<<"\n">>], [global]).
 
 tuplify([], Output) ->
-	Output;
+	list_to_tuple(Output);
 
 tuplify([_], Output) ->
-	Output;
+	list_to_tuple(Output);
 
 tuplify([Row1, Row2, Row3, Row4|T], Output) ->
 	tuplify(T, [{Row1, Row2, Row3, Row4}|Output]).
@@ -59,9 +59,8 @@ mass_writer([File|File_tail], [Name|Name_tail]) ->
 
 %%% Functions for sampling:
 random_sampler(Population, Size, PID) ->
-	Length = length(Population),
-	Pop_tuple = list_to_tuple(Population), % Since indexing tuples are way faster
-	PID ! {part, [element(rand:uniform(Length), Pop_tuple) || _ <- lists:seq(1, Size)]}.
+	Length = tuple_size(Population),
+	PID ! {part, [element(rand:uniform(Length), Population) || _ <- lists:seq(1, Size)]}.
 
 make_sample(File_list, Sample_size) ->
 	PID = spawn(fastrapper, supervisor, [[], length(File_list), self()]),
