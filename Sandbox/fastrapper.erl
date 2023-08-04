@@ -1,8 +1,8 @@
 %%% Fastrapper: The FASTQ Bootstrapper
 -module(fastrapper).
--export([file_reader/1, reader_worker/3, supervisor/3, random_sampler/3, make_sample/2, test_sampling/0, test_reading/0, test_writing/0, test_readwrite/0, start/0]).
+-export([reader_subworker/2, reader_worker/3, supervisor/3, random_sampler/3, start/0]).
 
-%%% Functions for reading and writing:
+%%% Functions for reading:
 file_reader(File_name) ->
 	{ok, File} = file:read_file(File_name),
 	Inflated_data = zlib:gunzip(File),
@@ -17,27 +17,25 @@ tuplify([_], Output) ->
 tuplify([Row1, Row2, Row3, Row4|T], Output) ->
 	tuplify(T, [{Row1, Row2, Row3, Row4}|Output]).
 
-file_writer([], _) ->
-	allWritten;
-
-file_writer([{R1, R2, R3, R4}|T], Name) ->
-	file:write_file(Name, io_lib:fwrite("~s~n~s~n~s~n~s~n", [R1, R2, R3, R4]), [append]),
-	file_writer(T, Name).
-
-gzipper(Name) ->
-	{ok, File} = file:read_file(Name),
-	Gz_file = zlib:gzip(File),
-	file:write_file(Name ++ ".gz", Gz_file),
-	file:delete(Name).
+reader_subworker(Path, PID) ->
+	File = file_reader(Path),
+	PID ! {fileDone, tuplify(File, [])}.
 
 reader_worker({Path, Name}, _, PID) ->
-	File_list = file_reader(Path),
-	Tuplist = tuplify(File_list, []),
-	PID ! {part, {Name, Tuplist}}.	
+	spawn(fastrapper, reader_subworker, [Path, self()]), % Read forward file in the background
+	[Short_path|_] = string:replace(Path, "_1.fq.gz", ""),
+	[Short_name|_] = string:replace(Name, "_1.fq.gz", ""),
+	File_R = file_reader(Short_path ++ "_2.fq.gz"),
+	Tuplist_R = tuplify(File_R, []),
+	receive
+		{fileDone, Tuplist_F} ->
+			ok
+	end,
+	PID ! {part, {Short_name, Tuplist_F, Tuplist_R}}.
 
 mass_reader(File_folder) ->
 	{ok, File_names} = file:list_dir(File_folder),
-	Fq_tester = fun(X) -> (re:run(X, ".fq.gz", [{capture, none}]) == match) end,
+	Fq_tester = fun(X) -> (re:run(X, "_1.fq.gz", [{capture, none}]) == match) end,
 	Fq_names = lists:filter(Fq_tester, File_names),
 	Fq_paths = lists:map(fun(X) -> File_folder ++ "/" ++ X end, Fq_names),
 	io:fwrite("~p~n", [Fq_paths]),
@@ -49,20 +47,12 @@ mass_reader(File_folder) ->
 			Package
 	end.
 
-mass_writer([]) ->
-	allWritten;
-
-mass_writer([{Name, File}|T]) ->
-	file_writer(File, Name),
-	gzipper(Name),
-	mass_writer(T).
-
 %%% Functions for sampling:
-random_sampler({Name, Population}, Size, PID) ->
-	Short_name = Name -- ".fq.gz",
-	File_name = Short_name ++ "_" ++ integer_to_list(Size) ++ "_bootstraps.fq",
-	Length = tuple_size(Population),
-	PID ! {part, {File_name, [element(rand:uniform(Length), Population) || _ <- lists:seq(1, Size)]}}.
+random_sampler({Name, Pop_for, Pop_rev}, Size, PID) ->
+	File_name = Name ++ "_" ++ integer_to_list(Size) ++ "_bootstraps",
+	Length = tuple_size(Pop_for),
+	Draws = [rand:uniform(Length) || _ <- lists:seq(1, Size)],
+	PID ! {part, {File_name, [{element(X, Pop_for), element(X, Pop_rev)} || X <- Draws]}}.
 
 make_sample(File_list, Sample_size) ->
 	PID = spawn(fastrapper, supervisor, [[], length(File_list), self()]),
@@ -72,6 +62,32 @@ make_sample(File_list, Sample_size) ->
 		{allParts, Package} ->
 			Package
 	end.
+
+%%% Functions for writing:
+f_r_writer([], _, _) ->
+	allWritten;
+
+f_r_writer([{{F1, F2, F3, F4}, {R1, R2, R3, R4}}|T], Name_F, Name_R) ->
+	file:write_file(Name_F, io_lib:fwrite("~s~n~s~n~s~n~s~n", [F1, F2, F3, F4]), [append]),
+	file:write_file(Name_R, io_lib:fwrite("~s~n~s~n~s~n~s~n", [R1, R2, R3, R4]), [append]),
+	f_r_writer(T, Name_F, Name_R).
+
+gzipper(Name) ->
+	{ok, File} = file:read_file(Name),
+	Gz_file = zlib:gzip(File),
+	file:write_file(Name ++ ".gz", Gz_file),
+	file:delete(Name).
+
+mass_writer([]) ->
+	allWritten;
+
+mass_writer([{Name, Samplings}|T]) ->
+	Forward = Name ++ "_1.fq",
+	Reverse = Name ++ "_2.fq",
+	f_r_writer(Samplings, Forward, Reverse),
+	gzipper(Forward),
+	gzipper(Reverse),
+	mass_writer(T).
 
 %%% Functions for spawning:
 supervisor(Package, 0, PID) ->
@@ -90,36 +106,13 @@ worker_launcher(Function, [H|T], Setting, PID) ->
 	spawn(fastrapper, Function, [H, Setting, PID]),
 	worker_launcher(Function, T, Setting, PID).
 
-%%% Test functions:
-test_sampling() ->
-	Task_list = [lists:seq(1, 1000000) || _ <- lists:seq(1, 6)],
-	Results = make_sample(Task_list, 100000),
-	io:fwrite("~p~n", [Results]).
-
-test_reading() ->
-	List = file_reader("../Raw_data/S646_142_EKDL230001504-1A_HNHKMDSX5_L3_1.fq.gz"),
-	Tuplist = tuplify(List, []),
-	Results = make_sample([Tuplist, Tuplist, Tuplist, Tuplist], 10000),
-	io:fwrite("~p~n", [Results]).
-
-test_writing() ->
-	Fake_file = [{"@Potato1", "AACTGTCACG", "+", "FFFFFFFFFF"}, {"@Potato2", "AACTGTCACG", "+", "FFFFFFFFFF"}, {"@Potato3", "AACTGTCACG", "+", "FFFFFFFFFF"}],
-	file_writer(Fake_file, "out.txt"),
-	gzipper("out.txt").
-
-test_readwrite() ->
-	List = file_reader("../Raw_data/S646_142_EKDL230001504-1A_HNHKMDSX5_L3_1.fq.gz"),
-	Tuplist = tuplify(List, []),
-	Results = make_sample([Tuplist], 10000),
-	file_writer(lists:nth(1, Results), "sample1.fq"),
-	gzipper("sample1.fq").
-
 %%% Start program:
 start() ->
 	File_folder = "../Raw_data",
 	Bootstraps = 10000,
 	File_list = mass_reader(File_folder),
+	io:fwrite("Files loaded.~n"),
 	Sample_list = make_sample(File_list, Bootstraps),
+	io:fwrite("Files bootstrapped.~n"),
 	mass_writer(Sample_list),
-	ok.
-	% todo: read, sample and write all files with forward and reverse synched
+	io:fwrite("Files written.~n").
