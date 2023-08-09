@@ -64,19 +64,17 @@ make_sample(File_list, Sample_size) ->
 	end.
 
 %%% Functions for writing:
-f_r_writer([], _, _) ->
-	allWritten;
+f_r_file([], File_F, File_R) ->
+	{File_F, File_R};
 
-f_r_writer([{{F1, F2, F3, F4}, {R1, R2, R3, R4}}|T], Name_F, Name_R) ->
-	file:write_file(Name_F, io_lib:fwrite("~s~n~s~n~s~n~s~n", [F1, F2, F3, F4]), [append]),
-	file:write_file(Name_R, io_lib:fwrite("~s~n~s~n~s~n~s~n", [R1, R2, R3, R4]), [append]),
-	f_r_writer(T, Name_F, Name_R).
+f_r_file([{{F1, F2, F3, F4}, {R1, R2, R3, R4}}|T], File_F, File_R) ->
+	File_F_Out = io_lib:fwrite("~s~n~s~n~s~n~s~n", [F1, F2, F3, F4]) ++ File_F,
+	File_R_Out = io_lib:fwrite("~s~n~s~n~s~n~s~n", [R1, R2, R3, R4]) ++ File_R,
+	f_r_file(T, File_F_Out, File_R_Out).
 
-gzipper(Name) ->
-	{ok, File} = file:read_file(Name),
+gzipper(Name, File) ->
 	Gz_file = zlib:gzip(File),
-	file:write_file(Name ++ ".gz", Gz_file),
-	file:delete(Name).
+	file:write_file(Name ++ ".gz", Gz_file).
 
 mass_writer([]) ->
 	allWritten;
@@ -84,9 +82,9 @@ mass_writer([]) ->
 mass_writer([{Name, Samplings}|T]) ->
 	Forward = Name ++ "_1.fq",
 	Reverse = Name ++ "_2.fq",
-	f_r_writer(Samplings, Forward, Reverse),
-	gzipper(Forward),
-	gzipper(Reverse),
+	{File_F, File_R} = f_r_file(Samplings, [], []),
+	gzipper(Forward, File_F),
+	gzipper(Reverse, File_R),
 	mass_writer(T).
 
 %%% Functions for spawning:
