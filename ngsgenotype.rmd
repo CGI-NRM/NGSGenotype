@@ -1,5 +1,23 @@
-library(ShortRead)
+---
+title: "ngsgenotype"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries and settings:
+```{r cars}
+library(ShortRead)
+library(wesanderson)
+
+primerPath <- "./Primers/primers.fa"
+filteredFolder <- "./Filtered_data/"
+```
+
+# Load primers:
+```{r pressure, echo=FALSE}
 ParsePrimers <- function(fastaFile) {
   fastaString <- paste(readLines(fastaFile), collapse = "\n")
   fastaList <- strsplit(fastaString, split = ">")
@@ -18,35 +36,37 @@ ParsePrimers <- function(fastaFile) {
   return(fastaDF)
 }
 
-primerDF <- ParsePrimers("./primers.fa")
-inputFiles <- list.files("./Filtered_data/", pattern = "*.fastq.gz")
+primerDF <- ParsePrimers(fastaFile = primerPath)
+```
 
+# Load files:
+```{r pressure, echo=FALSE}
 NameShortener <- function(name) {
   # name <- substr(name, 1, 20)
   name <- gsub("_[^_]+$", "", name)
   return(name)
 }
 
-BarCol <- function(Allelelength, highlight) {
-  c1 <- rep(wesanderson::wes_palette("Chevalier1")[3], length(Allelelength))
-  c1[which(names(Allelelength) %in% highlight)] <- wesanderson::wes_palette("Chevalier1")[2]
-  c1
-}
-
-inputFiles <- unlist(lapply(inputFiles, NameShortener))
-inputFiles <- unique(inputFiles)
-
-FastqLoader <- function(fileName) {
+FastqLoader <- function(fileName, pathToData = filteredFolder) {
   namePattern <- paste0(fileName, "*")
-  loadedFile <- readFastq(dirPath = "./Filtered_data/", pattern = namePattern)
+  loadedFile <- readFastq(dirPath = pathToData, pattern = namePattern)
   print(paste("Searching for", namePattern))
-  print(list.files("./Filtered_data/", pattern = namePattern))
+  print(paste("Found", length(list.files(pathToData, pattern = namePattern)), "files."))
   return(c(loadedFile, fileName))
 }
 
-loadedFastqFiles <- lapply(inputFiles, FastqLoader)
+# Identify all files:
+inputFiles <- list.files(filteredFolder, pattern = "*.fastq.gz")
+inputFiles <- unlist(lapply(inputFiles, NameShortener))
+inputFiles <- unique(inputFiles)
 
-FragLength2 <- function(sample, primerF = "AAAAA", primerR = "AAAAA", range = 0:500) {
+# Load all files:
+loadedFastqFiles <- lapply(inputFiles, FastqLoader)
+```
+
+# Identify genotypes and plot peaks:
+```{r pressure, echo=FALSE}
+FragLength <- function(sample, primerF = "AAAAA", primerR = "AAAAA", range = 0:500) {
   lengthF <- nchar(primerF)
   lengthR <- nchar(primerR)
   fragl <- ShortRead::width(ShortRead::sread(sample))
@@ -76,6 +96,12 @@ MostLikely <- function(results) {
   names(rev(GT))
 }
 
+BarCol <- function(Allelelength, highlight) {
+  c1 <- rep(wesanderson::wes_palette("Chevalier1")[3], length(Allelelength))
+  c1[which(names(Allelelength) %in% highlight)] <- wesanderson::wes_palette("Chevalier1")[2]
+  c1
+}
+
 PlotSample <- function(sampleName, sampleTab, sampleML) {
   barplot(sampleTab,
           col = BarCol(sampleTab, highlight = sampleML),
@@ -94,8 +120,8 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo) {
     } else {
       primerName <- unlist(strsplit(unlist(i[2]), "_"))[1]
       primerFR <- primerInfo[, colnames(primerInfo) == primerName]
-      tabSample <- FragLength2(sample = i[[1]], primerF = primerFR[1], primerR = primerFR[2], range = 80:250)
-      mlSample <- genotypefromNGS::MostLikely(results = tabSample)
+      tabSample <- FragLength(sample = i[[1]], primerF = primerFR[1], primerR = primerFR[2], range = 80:250)
+      mlSample <- MostLikely(results = tabSample)
       PlotSample(sampleName = unlist(i[2]), sampleTab = tabSample, sampleML = mlSample)
       outputDF <- rbind(outputDF, c(unlist(i[2]), mlSample))
     }
@@ -104,7 +130,8 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo) {
   return(outputDF)
 }
 
-test1 <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = "./Plots/results_reindeer_gt.pdf", primerInfo = primerDF)
-test2 <- t(test1)
+gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = "./Plots/results_reindeer_gt.pdf", primerInfo = primerDF)
+gentypResTrans <- t(gentypRes)
 
 # sortera bort inkorrekta sekvenser av samma längd, längre distans än sekvensfel
+```
