@@ -58,7 +58,6 @@ random_sampler({Name, Pop_for, Pop_rev}, Size, PID) ->
 mass_sampler(File_list, Sample_size) ->
 	PID = spawn(fastrapper, supervisor, [[], length(File_list), self()]),
 	worker_launcher(random_sampler, File_list, Sample_size, PID),
-
 	receive
 		{allParts, Package} ->
 			Package
