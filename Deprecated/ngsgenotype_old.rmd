@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(engine.opts = list(bash = "-l"))
 ```
 
+
 # Load libraries and settings:
 ```{r cars}
 library(ShortRead)
@@ -15,6 +16,9 @@ library(wesanderson)
 
 primerPath <- "./Primers/primers.fa"
 filteredFolder <- "./Filtered_data/"
+
+filteredFolder <- "~/Documents/bearNGSGenotype/finalanalys1/outfor/test2"
+
 ```
 
 # Load primers:
@@ -40,14 +44,11 @@ ParsePrimers <- function(fastaFile) {
 primerDF <- ParsePrimers(fastaFile = primerPath)
 ```
 
-# Detect files:
+# Load files:
 ```{r pressure, echo=FALSE}
 NameShortener <- function(name) {
   # name <- substr(name, 1, 20)
-  # name <- gsub("_[^_]+$", "", name)
-  # name <- gsub("BMK240416-BZ163-ZX01-010005-01", "", name)
-  # name <- gsub("_Unknown", "", name)
-  name <- gsub(".fastq.gz", "", name)
+  name <- gsub("_[^_]+$", "", name)
   return(name)
 }
 
@@ -59,14 +60,64 @@ FastqLoader <- function(fileName, pathToData = filteredFolder) {
   return(c(loadedFile, fileName))
 }
 
-# Find all files and modify names:
-inputFiles <- list.files(filteredFolder, pattern = ".fastq.gz")
+# Identify all files:
+filteredFolder <- "~/Documents/bearNGSGenotype/Filtered_data2"
+
+
+# Scat half plate
+pfun <- function(number) {
+    paste0("S",LETTERS[1:8], number)
+}
+
+# Scat half plate
+prover <- as.vector(sapply(7:12, pfun))
+which(prover=="SE12")
+prover <- prover[-c(2,3,4,31,42,45)]
+#prover <- prover[-19]
+
+# Scat full plate
+filteredFolder <- "~/Documents/bearNGSGenotype/Filtered_data"
+pfun <- function(number) {
+    paste0(LETTERS[1:8], number)
+}
+
+#Scat full plate
+prover <- as.vector(sapply(1:12, pfun))
+which(prover=="H12")
+prover <- prover[-c(4, 12, 19, 20, 23, 25, 26, 28, 33, 43, 46, 50, 52, 73, 79, 96)]
+
+resToCheck2 <- data.frame()
+
+prover <- c("A1", "SA11")
+
+for(i in prover) {
+    
+    i <- prover[1]
+    inputFiles <- list.files(filteredFolder, pattern = paste0("_", i, "B"))
+    inputFiles2 <- unlist(lapply(inputFiles, NameShortener))
+    pdfname <- paste0(unlist(strsplit(inputFiles2[1], "_"))[2], ".pdf")
+    par(mfrow=c(4,3))
+    loadedFastqFiles <- lapply(inputFiles, FastqLoader)
+    gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, 
+                                writeTo = pdfname, 
+                                primerInfo = primerDF)
+    
+    resToCheck2 <- rbind(resToCheck2, reformat(gentypRes))
+}
+
+
+
+inputFiles <- list.files(filteredFolder, pattern = "_A3_1.fastq.gz")
 inputFiles <- unlist(lapply(inputFiles, NameShortener))
+#inputFiles <- unique(inputFiles)
+
+# Load all files:
+loadedFastqFiles <- lapply(inputFiles, FastqLoader)
 ```
 
 # Identify genotypes and plot peaks:
 ```{r pressure, echo=FALSE}
-FragLength <- function(sample, primerF = "AAAAA", primerR = "AAAAA", range = 0:1000) {
+FragLength <- function(sample, primerF = "AAAAA", primerR = "AAAAA", range = 0:100) {
   lengthF <- nchar(primerF)
   lengthR <- nchar(primerR)
   fragl <- ShortRead::width(ShortRead::sread(sample))
@@ -109,7 +160,10 @@ PlotSample <- function(sampleName, sampleTab, sampleML) {
           xlab = paste(sampleML, collapse = "/"))
 }
 
-PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000) {
+
+
+
+PlotAllSamples <- function(loadedFiles, writeTo, primerInfo) {
   pdf(writeTo)
   outputDF <- data.frame(Allele = character(), LengthShort = numeric(), LengthLong = numeric())
   for(i in loadedFiles) {
@@ -125,7 +179,7 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000)
       primerFR <- primerInfo[, colnames(primerInfo) == primerName]
       tryCatch(
         {
-        tabSample <- FragLength(sample = i[[1]], primerF = primerFR[1], primerR = primerFR[2], range = fragRange)
+        tabSample <- FragLength(sample = i[[1]], range = 10:100)
       mlSample <- MostLikely(tabSample)
       PlotSample(sampleName = unlist(i)[2], sampleTab = tabSample, sampleML = mlSample)
       outputDF[dfRow,1] <- unlist(i[2])
@@ -144,33 +198,53 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000)
             return(NA)
         }
       )
+      
+#      tabSample <- FragLength(sample = i[[1]], range = 10:100)
+#      mlSample <- MostLikely(tabSample)
+#      PlotSample(sampleName = unlist(i)[2], sampleTab = tabSample, sampleML = mlSample)
+#      outputDF[dfRow,1] <- unlist(i[2])
+#      outputDF[dfRow, 2:3] <- as.numeric(mlSample)
+      #outputDF <- rbind(col.names(outputDF), )
     }
   }
   dev.off()
   return(outputDF)
 }
 
-RunLocus <- function(locusName, allFiles, filteredFolder) {
-  print(paste0("Running locus: ", locusName))
-  locusFiles <- allFiles[grepl(locusName, inputFiles)]
-  loadedFastqFiles <- lapply(locusFiles, FastqLoader, filteredFolder)
-  gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = paste0("Plots/", locusName, ".pdf"), primerInfo = primerDF, fragRange = 10:700)
-  colnames(gentypRes) <- c("Sample", paste0(locusName, "_1"), paste0(locusName, "_2"))
-  gentypRes$Sample <- gsub(".+_|BMK.+", "", gentypRes$Sample)
-  return(gentypRes)
+gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = "test.pdf", primerInfo = primerDF)
+
+reformat <- function(alleles) {
+    gentypResTrans <- t(alleles[,-1])
+    colnames(gentypResTrans) <- alleles$Allele
+    sample <- colnames(gentypResTrans)[1]
+    sample <- unlist(strsplit(sample, "_"))[2]
+    resdf <- data.frame(G10B_1   = gentypResTrans[1,1],
+                        G10B_2   = gentypResTrans[2,1],
+                        G10L_1   = gentypResTrans[1,2],
+                        G10L_2   = gentypResTrans[2,2],
+                        G1A_1    = gentypResTrans[1,3],
+                        G1A_2    = gentypResTrans[2,3],
+                        G1D_1    = gentypResTrans[1,4],
+                        G1D_2    = gentypResTrans[2,4],
+                        MU05_1   = gentypResTrans[1,5],
+                        MU05_2   = gentypResTrans[2,5],
+                        MU09_1   = gentypResTrans[1,6],
+                        MU09_2   = gentypResTrans[2,6],
+                        MU10_1   = gentypResTrans[1,7],
+                        MU10_2   = gentypResTrans[2,7],
+                        MU15_1   = gentypResTrans[1,8],
+                        MU15_2   = gentypResTrans[2,8],
+                        MU23_1   = gentypResTrans[1,9],
+                        MU23_2   = gentypResTrans[2,9],
+                        MU50_1   = gentypResTrans[1,10],
+                        MU50_2   = gentypResTrans[2,10],
+                        MU59_1   = gentypResTrans[1,11],
+                        MU59_2   = gentypResTrans[2,11])
+    row.names(resdf) <- sample
+    return(resdf)
 }
+ 
+reformat(gentypRes)
 
-RunAllLoci <- function(inputFiles, filteredFolder) {
-  lociNames <- unique(gsub("_.+", "", inputFiles))
-  genotypesList <- lapply(lociNames, RunLocus, inputFiles, filteredFolder)
-  allGenotypes <- Reduce(function(x, y) merge(x, y, by = "Sample"), genotypesList)
-  return(allGenotypes)
-}
-
-# Load all samples and calculate all loci:
-allGenotypes <- RunAllLoci(inputFiles, filteredFolder)
-
-# Write all genotypes to an exce-sheet:
-library(writexl)
-write_xlsx(x = allGenotypes, path = "all_735_genotypes.xlsx")
+# sortera bort inkorrekta sekvenser av samma längd, längre distans än sekvensfel
 ```
