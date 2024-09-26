@@ -1,9 +1,9 @@
 # Specify primer file:
-primer="Primers/primer_file.fa"
+primer=$1 # run script with the primer file as an argument
 
 # Trim primers and create a file for each locus:
-for file in Merged_data/*.fq.gz
+for file in Raw_data/*.fastq.gz
 do
-	sample=$(basename -s .fq.gz "$file")
-	cutadapt --discard-untrimmed -e 0.1 --no-indels -g ^file:$primer -o Filtered_data/{name}_$sample.fastq.gz $file
+	sample=$(basename -s .fastq.gz "$file")
+	cutadapt --discard-untrimmed -e 0.1 --no-indels --error-rate 0.1 -a file:$primer -o Filtered_data/{name}_$sample.fastq.gz $file
 done
