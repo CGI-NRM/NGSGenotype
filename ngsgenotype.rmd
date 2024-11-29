@@ -53,7 +53,7 @@ NameShortener <- function(name) {
 
 FastqLoader <- function(fileName, pathToData = filteredFolder) {
   #namePattern <- paste0(fileName, "*")
-  loadedFile <- readFastq(dirPath = pathToData, pattern = fileName)
+  loadedFile <- ShortRead::readFastq(dirPath = pathToData, pattern = fileName)
   print(paste("Searching for", fileName))
   print(paste("Found", length(list.files(pathToData, pattern = fileName)), "files."))
   return(c(loadedFile, fileName))
