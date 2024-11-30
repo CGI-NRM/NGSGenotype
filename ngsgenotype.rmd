@@ -155,6 +155,8 @@ RunLocus <- function(locusName, allFiles, filteredFolder) {
   locusFiles <- allFiles[grepl(locusName, inputFiles)]
   loadedFastqFiles <- lapply(locusFiles, FastqLoader, filteredFolder)
   gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = paste0("Plots/", locusName, ".pdf"), primerInfo = primerDF, fragRange = 10:700)
+  rm(loadedFastqFiles) # remove to conserve memory
+  gc() # run garbage collection to free memory
   colnames(gentypRes) <- c("Sample", paste0(locusName, "_1"), paste0(locusName, "_2"))
   gentypRes$Sample <- gsub(".+_|BMK.+", "", gentypRes$Sample)
   return(gentypRes)
