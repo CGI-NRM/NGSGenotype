@@ -2,7 +2,7 @@
 data_type=$1 # the first terminal argument will be taken as data type (single or merged)
 if [[ $data_type == "single" ]] # if single ended data
 then
-  dataset="Raw_data/*.fastq.gz"
+  dataset="Raw_data/*.fastq"
 elif [[ $data_type == "merged" ]] # if merged data
 then
   dataset=""Merged_data/*.merged.fq.gz""
