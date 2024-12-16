@@ -17,7 +17,7 @@ trim_primers ()
   for file in $2
   do
     sample=$(basename -s .fastq.gz "$file")
-    cutadapt --j 0 --discard-untrimmed -e 0.1 --no-indels --error-rate 0.1 -a file:$1 -o Filtered_data/{name}_$sample.fastq.gz $file
+    cutadapt -j 0 --discard-untrimmed -e 0.1 --no-indels --error-rate 0.1 -a file:$1 -o Filtered_data/{name}_$sample.fastq.gz $file
   done
 }
 
