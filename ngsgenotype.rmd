@@ -150,11 +150,16 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000)
   return(outputDF)
 }
 
-RunLocus <- function(locusName, allFiles, filteredFolder) {
+RunLocus <- function(locusName, allFiles, filteredFolder, locusCutoffs = c()) {
   print(paste0("Running locus: ", locusName))
   locusFiles <- allFiles[grepl(locusName, inputFiles)]
   loadedFastqFiles <- lapply(locusFiles, FastqLoader, filteredFolder)
-  gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = paste0("Plots/", locusName, ".pdf"), primerInfo = primerDF, fragRange = 10:700)
+  if(locusName %in% names(locus_cutoffs)) {
+    cutoff = locus_cutoffs[locusName][[1]]
+  } else {
+    cutoff = c(10, 700)
+  }
+  gentypRes <- PlotAllSamples(loadedFiles = loadedFastqFiles, writeTo = paste0("Plots/", locusName, ".pdf"), primerInfo = primerDF, fragRange = cutoff)
   rm(loadedFastqFiles) # remove to conserve memory
   gc() # run garbage collection to free memory
   colnames(gentypRes) <- c("Sample", paste0(locusName, "_1"), paste0(locusName, "_2"))
@@ -162,15 +167,19 @@ RunLocus <- function(locusName, allFiles, filteredFolder) {
   return(gentypRes)
 }
 
-RunAllLoci <- function(inputFiles, filteredFolder) {
+RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c()) {
   lociNames <- unique(gsub("_.+", "", inputFiles))
-  genotypesList <- lapply(lociNames, RunLocus, inputFiles, filteredFolder)
+  genotypesList <- lapply(lociNames, RunLocus, inputFiles, filteredFolder, locusCutoffs)
   allGenotypes <- Reduce(function(x, y) merge(x, y, by = "Sample"), genotypesList)
   return(allGenotypes)
 }
 
+# Specify if any loci should have specific cutoffs:
+locusCutoffs <- c()
+# locusCutoffs$`locus name` <- c(10, 1000) # add 'locus name' and its designated cutoffs
+
 # Load all samples and calculate all loci:
-allGenotypes <- RunAllLoci(inputFiles, filteredFolder)
+allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
 
 # Write all genotypes to an exce-sheet:
 library(writexl)
