@@ -1,0 +1,99 @@
+---
+title: "ngsgenotype_snp"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries and settings:
+```{r}
+library(ShortRead)
+library(wesanderson)
+
+filteredFolder <- "./Filtered_data/SNP_filtered/"
+```
+
+# Detect files:
+```{r}
+inputFiles <- list.files(filteredFolder, pattern = ".fastq.gz")
+```
+
+# Load files:
+```{r}
+FastqLoader <- function(fileName, pathToData = filteredFolder) {
+  loadedFile <- ShortRead::readFastq(dirPath = pathToData, pattern = fileName)
+  print(paste("Searching for", fileName))
+  print(paste("Found", length(list.files(pathToData, pattern = fileName)), "files."))
+  return(c(loadedFile, fileName))
+}
+
+PickGenotype <- function(srVector, cutoff) {
+  srObject <- srVector[[1]]
+  srTable <- ShortRead::tables(srObject)$top
+  if(length(srTable) > 1) {
+    topSNP <- srTable[1]
+    sndSNP <- srTable[2]
+  } else if(length(srTable) == 1) {
+    topSNP <- srTable[1]
+    sndSNP <- srTable[1]
+  } else {
+    topSNP <- 0
+    sndSNP <- 0
+  }
+  if((topSNP + sndSNP) > cutoff[1]) {
+    if(((sndSNP / topSNP) * 10) > cutoff[2]) {
+      return(c(srVector[[2]], names(topSNP), names(sndSNP)))
+    } else {
+      return(c(srVector[[2]], names(topSNP), names(topSNP)))
+    }
+  } else {
+    return(c(srVector[[2]], "-", "-"))
+  }
+}
+
+RunLocus <- function(locusName, allFiles, filteredFolder, locusCutoffs = c()) {
+  print(paste0("Running locus: ", locusName))
+  locusFiles <- allFiles[grepl(locusName, inputFiles)]
+  loadedFastqFiles <- lapply(locusFiles, FastqLoader, filteredFolder)
+  if(locusName %in% names(locusCutoffs)) { # if a specific cutoff is set for this locus
+    cutoff = locus_cutoffs[locusName][[1]]
+  } else { # else use standard settings
+    cutoff = c(10, 10) # minimum 10 reads, minimum 10% to be a heterozygote
+  }
+  genotypeRes <- lapply(loadedFastqFiles, PickGenotype, cutoff)
+  rm(loadedFastqFiles) # remove to conserve memory
+  gc() # run garbage collection to free memory
+  genotypeCols <- do.call(rbind, genotypeRes)
+  genotypeCols <- as.data.frame(genotypeCols)
+  colnames(genotypeCols) <- c("Sample", paste0(locusName, "_1"), paste0(locusName, "_2"))
+  genotypeCols$Sample <- gsub(".+_|BMK.+", "", genotypeCols$Sample)
+  return(genotypeCols)
+}
+
+RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c()) {
+  lociNames <- unique(gsub("_.+", "", inputFiles)) # remove everything after and including the first underscore
+  genotypesList <- lapply(lociNames, RunLocus, inputFiles, filteredFolder, locusCutoffs)
+  allGenotypes <- Reduce(function(x, y) merge(x, y, by = "Sample"), genotypesList)
+  return(allGenotypes)
+}
+
+# Specify if any loci should have specific cutoffs:
+locusCutoffs <- c()
+# locusCutoffs$`locus name` <- c(10, 1000) # add 'locus name' and its designated cutoffs
+
+# Load all samples and calculate all loci:
+allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
+```
+
+# Testing:
+```{r}
+loadedFile <- ShortRead::readFastq(dirPath = filteredFolder, pattern = "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz")
+View(tables(loadedFile)$top[1:2])
+View(tables(loadedFile)$top)
+
+PickGenotype(c(loadedFile, "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz"), c(100, 10))
+locusGenotypes <- RunLocus("Ua-snp-146", inputFiles, filteredFolder, locusCutoffs)
+```
+
