@@ -12,7 +12,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ShortRead)
 library(wesanderson)
 
-filteredFolder <- "./Filtered_data/SNP_filtered/"
+filteredFolder <- "./Filtered_data_minion/SNP_filtered/"
+filteredFolder <- "./Filtered_data_BMK/SNP_filtered/"
 ```
 
 # Detect files:
@@ -43,7 +44,7 @@ PickGenotype <- function(srVector, cutoff) {
     sndSNP <- 0
   }
   if((topSNP + sndSNP) > cutoff[1]) {
-    if(((sndSNP / topSNP) * 10) > cutoff[2]) {
+    if(((sndSNP / topSNP) * 100) > cutoff[2]) {
       return(c(srVector[[2]], paste0(names(topSNP), names(sndSNP))))
     } else {
       # return(c(srVector[[2]], names(topSNP), names(topSNP)))
@@ -84,20 +85,24 @@ RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c()) {
 
 # Specify if any loci should have specific cutoffs:
 locusCutoffs <- c()
-locusCutoffs <- rep(list(c(10, 1)), length(unique(gsub("_.+", "", inputFiles))))
+locusCutoffs <- rep(list(c(10, 10)), length(unique(gsub("_.+", "", inputFiles))))
 names(locusCutoffs) <- unique(gsub("_.+", "", inputFiles))
 locusCutoffs
 # locusCutoffs$`locus name` <- c(10, 10) # add 'locus name' and its designated cutoffs
 
 # Load all samples and calculate all loci:
 allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
+
+# If genotypes are returned as only one letter it is because of the fact that there are empty reads in the fastq
 ```
 
 # Testing:
 ```{r}
 loadedFile <- ShortRead::readFastq(dirPath = filteredFolder, pattern = "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz")
+loadedFile <- ShortRead::readFastq(dirPath = filteredFolder, pattern = "Ua-snp-125_minion_r4_merged_barcode208.fastq.gz")
 View(tables(loadedFile)$top[1:2])
 View(tables(loadedFile)$top)
+tables(loadedFile)$top
 
 PickGenotype(c(loadedFile, "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz"), c(100, 10))
 locusGenotypes <- RunLocus("Ua-snp-146", inputFiles, filteredFolder, locusCutoffs)
@@ -105,14 +110,62 @@ locusGenotypes <- RunLocus("Ua-snp-146", inputFiles, filteredFolder, locusCutoff
 
 # Testing popgen:
 ```{r}
-BiocManager::install("snpReady")
-
 library(poppr)
 library(snpReady)
 
-# find.package("poppr")
-# read.table2("/home/william/R/x86_64-pc-linux-gnu-library/4.4/poppr/files/rootrot.csv")
+# head(allGenotypes)
+# allGenotypesEdit <- allGenotypes[, -c(1)]
+# rownames(allGenotypesEdit) <- allGenotypes$Sample
+# loadedGenotypes <- snpReady::raw.data(data = as.matrix(allGenotypesEdit), frame = "wide", base = TRUE, sweep.sample = 0.5, call.rate = 0.95, maf = 0.10, imput = FALSE)
 
+library(adegenet)
+# Genind path:
+genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
+genotypeGenind
+genotypeGencln <- poppr::as.genclone(genotypeGenind)
+# mll(genotypeGencln) <- "original"
+# mll(genotypeGencln) <- "contracted"
+# mlg.filter(genotypeGencln, distance = diss.dist)
+# genotypeGencln
+# poppr::mlg(genotypeGencln)
+# library(pegas)
+# genotypeLoci <- pegas::genind2loci(genotypeGenind)
+# genotypeLoci
+hist(diss.dist(genotypeGenind, percent = FALSE, mat = FALSE))
+# hist(bitwise.dist(genotypeGencln, percent = FALSE, mat = FALSE)) # gives exactly the same plot
 
+# mlg.filter(genotypeGencln, distance = bitwise.dist)
+# mlg.filter(genotypeGencln, distance = diss.dist) <- .Machine$double.eps^0.5
+mlg.filter(genotypeGencln, distance = diss.dist) <- 30 # set a high threshold based on histogram
+genotypeGencln
+mll(genotypeGencln)
+
+# Genlight path:
+# allGenotypesEdit <- allGenotypes[, -c(1)]
+# allGenotypesEdit <- allGenotypesEdit[, -c(6, 29)]
+# rownames(allGenotypesEdit) <- allGenotypes$Sample
+# genGenlight <- adegenet::as.genlight(allGenotypesEdit)
+# genGenlight
+# genotypeSnpclone <- poppr::as.snpclone(genGenlight)
+```
+
+# Initial steps to collapsing individuals:
+```{r}
+library(poppr)
+library(adegenet)
+
+genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
+genotypeGenind
+genotypeGencln <- poppr::as.genclone(genotypeGenind)
+
+mll(genotypeGencln) <- "original"
+# genotypeGencln
+# mll(genotypeGencln)
+hist(diss.dist(genotypeGenind, percent = FALSE, mat = FALSE))
+mlg.filter(genotypeGencln, distance = diss.dist) <- 30 # set a high threshold based on histogram
+genotypeGencln
+mll(genotypeGencln)
+
+# assign individual names as populations for continuous SNP-database, and add samples to database under assigned population?
 ```
 
