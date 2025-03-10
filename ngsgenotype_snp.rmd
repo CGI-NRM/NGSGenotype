@@ -154,18 +154,28 @@ mll(genotypeGencln)
 library(poppr)
 library(adegenet)
 
-genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
+# Load data:
+genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "", pop = LETTERS[1:length(allGenotypes$Sample)])
 genotypeGenind
 genotypeGencln <- poppr::as.genclone(genotypeGenind)
 
+# Collapse genotypes:
 mll(genotypeGencln) <- "original"
-# genotypeGencln
-# mll(genotypeGencln)
 hist(diss.dist(genotypeGenind, percent = FALSE, mat = FALSE))
 mlg.filter(genotypeGencln, distance = diss.dist) <- 30 # set a high threshold based on histogram
 genotypeGencln
 mll(genotypeGencln)
 
+# Assign genotypes:
 # assign individual names as populations for continuous SNP-database, and add samples to database under assigned population?
+View(cbind(genotypeGencln@mlg@mlg$contracted, genotypeGencln$tab))
+View(poppr::mlg.table(genotypeGencln))
+
+# Mockup:
+# 1. add a column to the "database" with ind-names
+# 2. load the "database" (without ind-names) and new samples together
+# 3. collapse individuals (will collapse the new ones to an existing genotype)
+# 4. check if collapsed genotypes contain a sample with an existing ind-name, if so add new ones to database under that name
+# 5. if individuals do not exist, add them to database with new names.
 ```
 
