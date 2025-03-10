@@ -12,8 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ShortRead)
 library(wesanderson)
 
-filteredFolder <- "./Filtered_data_minion/SNP_filtered/"
-filteredFolder <- "./Filtered_data_BMK/SNP_filtered/"
+filteredFolder <- "./Filtered_data/SNP_filtered/"
 ```
 
 # Detect files:
@@ -44,15 +43,18 @@ PickGenotype <- function(srVector, cutoff) {
     sndSNP <- 0
   }
   if((topSNP + sndSNP) > cutoff[1]) {
-    if(((sndSNP / topSNP) * 100) > cutoff[2]) {
-      return(c(srVector[[2]], paste0(names(topSNP), names(sndSNP))))
-    } else {
+    if(((sndSNP / topSNP) * 100) > cutoff[2]) { # if a heterozygote or if there was only one top nucleotide
+      # print(paste0(sort(c(names(topSNP), names(sndSNP))), collapse = ""))
+      return(c(srVector[[2]], paste0(sort(c(names(topSNP), names(sndSNP))), collapse = "")))
+      # return(c(srVector[[2]], paste0(names(topSNP), names(sndSNP))))
+    } else { # if a homozygote
       # return(c(srVector[[2]], names(topSNP), names(topSNP)))
       return(c(srVector[[2]], paste0(names(topSNP), names(topSNP))))
     }
   } else {
     # return(c(srVector[[2]], "-", "-"))
-    return(c(srVector[[2]], NA))
+    return(c(srVector[[2]], ""))
+    # return(c(srVector[[2]], NA))
   }
 }
 
@@ -85,7 +87,7 @@ RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c()) {
 
 # Specify if any loci should have specific cutoffs:
 locusCutoffs <- c()
-locusCutoffs <- rep(list(c(10, 10)), length(unique(gsub("_.+", "", inputFiles))))
+locusCutoffs <- rep(list(c(10, 20)), length(unique(gsub("_.+", "", inputFiles)))) # minimum 10 reads, minimum 20% to be heterozygote
 names(locusCutoffs) <- unique(gsub("_.+", "", inputFiles))
 locusCutoffs
 # locusCutoffs$`locus name` <- c(10, 10) # add 'locus name' and its designated cutoffs
@@ -96,57 +98,41 @@ allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
 # If genotypes are returned as only one letter it is because of the fact that there are empty reads in the fastq
 ```
 
-# Testing:
+# Distance function:
 ```{r}
-loadedFile <- ShortRead::readFastq(dirPath = filteredFolder, pattern = "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz")
-loadedFile <- ShortRead::readFastq(dirPath = filteredFolder, pattern = "Ua-snp-125_minion_r4_merged_barcode208.fastq.gz")
-View(tables(loadedFile)$top[1:2])
-View(tables(loadedFile)$top)
-tables(loadedFile)$top
+CompareBears <- function(bear1, bear2, snpFrame) {
+  CheckDiff <- function(allelePair) {
+    x <- allelePair[1]
+    y <- allelePair[2]
+    if((x == y) && (x != "") && (y != "")) { # if alleles are nonempty and the same
+      return(1) # count one similarity
+    } else {
+      return(0) # count zero similarities
+    }
+  }
+  similarities <- lapply(rbind(snpFrame[bear1, ], snpFrame[bear2, ])[, -c(1)], CheckDiff)
+  simSum <- sum(unlist(similarities)) # number of shared alleles between the two samples
+  return((ncol(snpFrame) - 1) - simSum) # return number of non shared alleles between the two samples
+}
 
-PickGenotype(c(loadedFile, "Ua-snp-146_minion_r4_merged_barcode203.fastq.gz"), c(100, 10))
-locusGenotypes <- RunLocus("Ua-snp-146", inputFiles, filteredFolder, locusCutoffs)
-```
+BearDist <- function(snpFrame) { # function that generates a dist object with how many loci differ and or are missing between individuals
+  sampNames <- snpFrame$Sample
+  nSamples <- length(sampNames)
+  bearDiffs <- c()
+  for(current in 1:(nSamples - 1)) {
+    remainingIndices <- (1:nSamples)[(current + 1):nSamples]
+    bearDiffs <- c(bearDiffs, lapply(remainingIndices, CompareBears, current, snpFrame))
+    # print(paste0(current, ":", remainingIndices))
+  }
+  bearMatrix <- matrix(data = 0, nrow = nSamples, ncol = nSamples)
+  colnames(bearMatrix) <- sampNames
+  rownames(bearMatrix) <- sampNames
+  bearDistObject <- as.dist(bearMatrix)
+  bearDistObject[] <- unlist(bearDiffs) # fill dist object with distance values
+  return(bearDistObject)
+}
 
-# Testing popgen:
-```{r}
-library(poppr)
-library(snpReady)
-
-# head(allGenotypes)
-# allGenotypesEdit <- allGenotypes[, -c(1)]
-# rownames(allGenotypesEdit) <- allGenotypes$Sample
-# loadedGenotypes <- snpReady::raw.data(data = as.matrix(allGenotypesEdit), frame = "wide", base = TRUE, sweep.sample = 0.5, call.rate = 0.95, maf = 0.10, imput = FALSE)
-
-library(adegenet)
-# Genind path:
-genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
-genotypeGenind
-genotypeGencln <- poppr::as.genclone(genotypeGenind)
-# mll(genotypeGencln) <- "original"
-# mll(genotypeGencln) <- "contracted"
-# mlg.filter(genotypeGencln, distance = diss.dist)
-# genotypeGencln
-# poppr::mlg(genotypeGencln)
-# library(pegas)
-# genotypeLoci <- pegas::genind2loci(genotypeGenind)
-# genotypeLoci
-hist(diss.dist(genotypeGenind, percent = FALSE, mat = FALSE))
-# hist(bitwise.dist(genotypeGencln, percent = FALSE, mat = FALSE)) # gives exactly the same plot
-
-# mlg.filter(genotypeGencln, distance = bitwise.dist)
-# mlg.filter(genotypeGencln, distance = diss.dist) <- .Machine$double.eps^0.5
-mlg.filter(genotypeGencln, distance = diss.dist) <- 30 # set a high threshold based on histogram
-genotypeGencln
-mll(genotypeGencln)
-
-# Genlight path:
-# allGenotypesEdit <- allGenotypes[, -c(1)]
-# allGenotypesEdit <- allGenotypesEdit[, -c(6, 29)]
-# rownames(allGenotypesEdit) <- allGenotypes$Sample
-# genGenlight <- adegenet::as.genlight(allGenotypesEdit)
-# genGenlight
-# genotypeSnpclone <- poppr::as.snpclone(genGenlight)
+# BearDist(allGenotypes) # usage
 ```
 
 # Initial steps to collapsing individuals:
@@ -155,21 +141,23 @@ library(poppr)
 library(adegenet)
 
 # Load data:
-genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "", pop = LETTERS[1:length(allGenotypes$Sample)])
+genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
 genotypeGenind
 genotypeGencln <- poppr::as.genclone(genotypeGenind)
+genotypeGencln
 
 # Collapse genotypes:
-mll(genotypeGencln) <- "original"
-hist(diss.dist(genotypeGenind, percent = FALSE, mat = FALSE))
-mlg.filter(genotypeGencln, distance = diss.dist) <- 30 # set a high threshold based on histogram
+mll(genotypeGencln) <- "original" # reset genotypes
+hist(BearDist(allGenotypes)) # histogram of BearDists (TM)
+threshold <- (ncol(allGenotypes) - 1) - 67 # make a threshold where 67 loci needs to be similar between samples
+mlg.filter(genotypeGencln, distance = BearDist(allGenotypes)) <- threshold # collapse based on threshold, using BearDists (TM)
 genotypeGencln
 mll(genotypeGencln)
 
 # Assign genotypes:
-# assign individual names as populations for continuous SNP-database, and add samples to database under assigned population?
-View(cbind(genotypeGencln@mlg@mlg$contracted, genotypeGencln$tab))
-View(poppr::mlg.table(genotypeGencln))
+gtAndSnps <- as.data.frame(cbind(genotypes = genotypeGencln@mlg@mlg$contracted, genotypeGencln$tab)) # add genotypes to SNP table
+uniqueSamples <- rownames(gtAndSnps)[match(unique(gtAndSnps$genotypes), gtAndSnps$genotypes)] # take first sample of each genotype
+# Pull those samples from the sample sheets
 
 # Mockup:
 # 1. add a column to the "database" with ind-names
@@ -178,4 +166,3 @@ View(poppr::mlg.table(genotypeGencln))
 # 4. check if collapsed genotypes contain a sample with an existing ind-name, if so add new ones to database under that name
 # 5. if individuals do not exist, add them to database with new names.
 ```
-
