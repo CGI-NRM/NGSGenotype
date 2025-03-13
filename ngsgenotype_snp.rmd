@@ -132,10 +132,10 @@ BearDist <- function(snpFrame) { # function that generates a dist object with ho
   return(bearDistObject)
 }
 
-# BearDist(allGenotypes) # usage
+BearDist(allGenotypes) # usage
 ```
 
-# Initial steps to collapsing individuals:
+# Collapse samples to individuals:
 ```{r}
 library(poppr)
 library(adegenet)
@@ -148,9 +148,10 @@ genotypeGencln
 
 # Collapse genotypes:
 mll(genotypeGencln) <- "original" # reset genotypes
+BearDist(allGenotypes) # print BearDists (TM)
 hist(BearDist(allGenotypes)) # histogram of BearDists (TM)
 threshold <- (ncol(allGenotypes) - 1) - 67 # make a threshold where 67 loci needs to be similar between samples
-mlg.filter(genotypeGencln, distance = BearDist(allGenotypes)) <- threshold # collapse based on threshold, using BearDists (TM)
+mlg.filter(genotypeGencln, distance = BearDist(allGenotypes)) <- 48 # threshold # collapse based on threshold, using BearDists (TM)
 genotypeGencln
 mll(genotypeGencln)
 
