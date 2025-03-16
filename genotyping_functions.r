@@ -56,10 +56,13 @@ RunLocus <- function(locusName, allFiles, filteredFolder, locusCutoffs = c()) {
   return(genotypeCols)
 }
 
-RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c()) {
+RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c(), specifiedLoci = c()) {
   lociNames <- unique(gsub("_.+", "", inputFiles)) # remove everything after and including the first underscore
   genotypesList <- lapply(lociNames, RunLocus, inputFiles, filteredFolder, locusCutoffs)
   allGenotypes <- Reduce(function(x, y) merge(x, y, by = "Sample"), genotypesList)
+  if(length(specifiedLoci) > 0) {
+    allGenotypes <- allGenotypes[, c("Sample", specifiedLoci)]
+  }
   return(allGenotypes)
 }
 

@@ -23,7 +23,9 @@ locusCutoffs <- GenerateCutoffs(minReads = 10, minPerc = 20)
 # locusCutoffs$`locus name` <- c(10, 10) # add 'locus name' and its designated cutoffs
 
 # Load all samples and calculate all loci:
-allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
+locusNames <- readLines("bear_snp_loci.csv") # if loci are to be in a specific order, load this
+# locusNames <- c() # if loci order does not matter, uncomment this this
+allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs, locusNames)
 
 # If genotypes are returned as only one letter it is because of the fact that there are empty reads in the fastq
 ```
