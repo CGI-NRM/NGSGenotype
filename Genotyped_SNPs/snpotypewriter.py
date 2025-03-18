@@ -1,5 +1,5 @@
 # Usage:
-# python ultimate_locus_parser.py [folder containing fastq files] > example_output_name.csv
+# python snpotypewriter.py ../Filtered_data/SNP_filtered/ > example_output_name.csv
 
 import os
 import gzip
