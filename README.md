@@ -27,3 +27,23 @@ bash cutadapt_script.sh merged Primers/Bear_SNP_all_loci.fa # for merged data wi
 # or:
 bash cutadapt_script.sh single Primers/L_vulgaris.fa # for single end data with Lissotriton primers
 ```
+
+## Microsatellites
+Continue analysis in R using the rmarkdown file 'ngsgenotype.rmd'.
+
+## Single Nucleotide Polymorphisms
+First trim the superflous sequences around the SNPs:
+```bash
+bash filter_out_SNPs.sh # currently hardcoded for bear SNPs
+```
+
+Then, either continue in R using the rmarkdown 'ngsgenotype_snp.rmd', or first genotype the SNPs by:
+```bash
+cd Genotyped_SNPs/
+python snpotypewriter.py ../Filtered_data/SNP_filtered/ > genotyped_SNP_data.csv
+
+# or, if data is divided into chunks (where chunk folder names start with "chunk_"):
+bash loop_over_chunks.sh ../path/to/folder/with/chunks/
+```
+
+And then continue in R.
