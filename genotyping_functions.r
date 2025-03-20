@@ -10,18 +10,19 @@ FastqLoader <- function(fileName, pathToData = filteredFolder) { # load fastq
 PickGenotype <- function(srVector, cutoff) {
   srObject <- srVector[[1]]
   srTable <- ShortRead::tables(srObject)$top
+  srTable <- srTable[names(srTable) != ""] # remove empty "SNP"
   if(length(srTable) > 1) {
     topSNP <- srTable[1]
     sndSNP <- srTable[2]
   } else if(length(srTable) == 1) {
     topSNP <- srTable[1]
-    sndSNP <- srTable[1]
+    sndSNP <- 0 # as to not duplicate number of reads
   } else {
     topSNP <- 0
     sndSNP <- 0
   }
-  if((topSNP + sndSNP) > cutoff[1]) {
-    if(((sndSNP / topSNP) * 100) > cutoff[2]) { # if a heterozygote or if there was only one top nucleotide
+  if((topSNP + sndSNP) >= cutoff[1]) {
+    if(((sndSNP / (sndSNP + topSNP)) * 100) >= cutoff[2]) { # if a heterozygote or if there was only one top nucleotide
       # print(paste0(sort(c(names(topSNP), names(sndSNP))), collapse = ""))
       return(c(srVector[[2]], paste0(sort(c(names(topSNP), names(sndSNP))), collapse = "")))
       # return(c(srVector[[2]], paste0(names(topSNP), names(sndSNP))))
