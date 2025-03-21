@@ -39,7 +39,7 @@ PickGenotype <- function(srVector, cutoff) {
 
 RunLocus <- function(locusName, allFiles, filteredFolder, locusCutoffs = c()) {
   print(paste0("Running locus: ", locusName))
-  locusFiles <- allFiles[grepl(locusName, inputFiles)]
+  locusFiles <- allFiles[grepl(locusName, allFiles)]
   loadedFastqFiles <- lapply(locusFiles, FastqLoader, filteredFolder)
   if(locusName %in% names(locusCutoffs)) { # if a specific cutoff is set for this locus
     cutoff = locusCutoffs[locusName][[1]]
@@ -67,7 +67,7 @@ RunAllLoci <- function(inputFiles, filteredFolder, locusCutoffs = c(), specified
   return(allGenotypes)
 }
 
-GenerateCutoffs <- function(minReads = 10, minPerc = 20) { # min reads to keep locus, min % to keep lesser allele
+GenerateCutoffs <- function(inputFiles, minReads = 10, minPerc = 20) { # min reads to keep locus, min % to keep lesser allele
   locusCutoffs <- c()
   locusCutoffs <- rep(list(c(minReads, minPerc)), length(unique(gsub("_.+", "", inputFiles))))
   names(locusCutoffs) <- unique(gsub("_.+", "", inputFiles))
