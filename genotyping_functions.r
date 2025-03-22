@@ -74,30 +74,24 @@ GenerateCutoffs <- function(inputFiles, minReads = 10, minPerc = 20) { # min rea
   return(locusCutoffs)
 }
 
-CompareBears <- function(bear1, bear2, snpFrame) { # count matching loci between two bears
-  CheckDiff <- function(allelePair) {
-    x <- allelePair[1]
-    y <- allelePair[2]
-    if((x == y) && (x != "") && (y != "")) { # if alleles are nonempty and the same
-      return(1) # count one similarity
-    } else {
-      return(0) # count zero similarities
-    }
-  }
-  similarities <- lapply(rbind(snpFrame[bear1, ], snpFrame[bear2, ])[, -c(1)], CheckDiff)
-  simSum <- sum(unlist(similarities)) # number of shared alleles between the two samples
-  return((ncol(snpFrame) - 1) - simSum) # return number of non shared alleles between the two samples
+CompareBears <- function(bear1Data, bear2Data, nLoci) { # count matching loci between two bears
+  simSum <- sum(bear1Data == bear2Data, na.rm = TRUE) # number of shared alleles between the two samples
+  return(nLoci - simSum) # return number of non shared alleles between the two samples
 }
 
 BearDist <- function(snpFrame) { # function that generates a dist object with how many loci differ and or are missing between individuals
   sampNames <- snpFrame$Sample
   nSamples <- length(sampNames)
-  bearDiffs <- c()
-  for(current in 1:(nSamples - 1)) {
+  GetDiffs <- function(current, nSamples, snpFrame, nLoci) {
+    print(paste0("Calculating sample ", current, " out of ", nSamples))
     remainingIndices <- (1:nSamples)[(current + 1):nSamples]
-    bearDiffs <- c(bearDiffs, lapply(remainingIndices, CompareBears, current, snpFrame))
-    # print(paste0(current, ":", remainingIndices))
+    sampleDiffs <- apply(snpFrame[remainingIndices, -c(1)], 1, CompareBears, snpFrame[current, -c(1)], nLoci) # uses experimental more efficient comparison
+    return(sampleDiffs)
   }
+  snpFrame[snpFrame == ''] <- NA
+  nLoci <- ncol(snpFrame) - 1
+  diffList <- lapply(1:(nSamples - 1), GetDiffs, nSamples, snpFrame, nLoci)
+  bearDiffs <- do.call(c, diffList)
   bearMatrix <- matrix(data = 0, nrow = nSamples, ncol = nSamples)
   colnames(bearMatrix) <- sampNames
   rownames(bearMatrix) <- sampNames
