@@ -36,6 +36,36 @@ allGenotypes <- do.call(rbind, loadedFiles) # row bind all separate dataframes i
 allGenotypes[is.na(allGenotypes)] <- '' # remove NA values
 ```
 
+# Filter samples and loci:
+```{r}
+GenotypeFiltering <- function(inGenotypes, cutOff = 20) { # edge case: if a sample has 0% missing data while also having 21 cases of the exact same allele composition it will also be filtered out.
+  filteredGenotypes <- inGenotypes[!grepl("NEGATIVE|POSITIVE", inGenotypes$Sample), ]
+  filteredGenotypes <- filteredGenotypes[unlist(lapply(apply(filteredGenotypes[, -c(1)], 1, table), `[[`, 1)) <= cutOff, ] # check how many nothing values
+  saveRDS(filteredGenotypes, file = "filteredGenotypes.rds")
+  rejectedGenotypes <- inGenotypes[unlist(lapply(apply(inGenotypes[, -c(1)], 1, table), `[[`, 1)) > cutOff, ]
+  rejectedGenotypes <- rbind(rejectedGenotypes, inGenotypes[grepl("NEGATIVE|POSITIVE", inGenotypes$Sample), ])
+  saveRDS(rejectedGenotypes, file = "rejectedGenotypes.rds")
+  outGT <- list()
+  outGT$filtered <- filteredGenotypes
+  outGT$rejected <- rejectedGenotypes
+  return(outGT)
+}
+
+# Filter out sex loci:
+autoGenotypes <- allGenotypes[, !grepl("Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x", colnames(allGenotypes))]
+saveRDS(autoGenotypes, file = "autoGenotypes.rds")
+sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl("Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x", colnames(allGenotypes))])
+saveRDS(sexGenotypes, file = "sexGenotypes.rds")
+
+# Filter out samples with less than 66 working loci:
+filterOutput <- GenotypeFiltering(autoGenotypes)
+filteredGenotypes <- filterOutput$filtered
+rejectedGenotypes <- filterOutput$rejected
+
+# Filter out empty loci:
+presentGenotypes <- filteredGenotypes[, !lapply(filteredGenotypes, unique) == '']
+```
+
 # Collapse samples to individuals:
 ```{r}
 # Load libraries:
@@ -43,17 +73,19 @@ library(poppr)
 library(adegenet)
 
 # Load data:
-genotypeGenind <- adegenet::df2genind(allGenotypes[, -c(1)], ploidy = 2, ind.names = allGenotypes$Sample, sep = "")
+genotypeGenind <- adegenet::df2genind(presentGenotypes[, -c(1)], ploidy = 2, ind.names = presentGenotypes$Sample, sep = "")
 genotypeGenind
 genotypeGencln <- poppr::as.genclone(genotypeGenind)
 genotypeGencln
 
 # Collapse genotypes:
 mll(genotypeGencln) <- "original" # reset genotypes
-BearDist(allGenotypes) # print BearDists (TM)
-hist(BearDist(allGenotypes)) # histogram of BearDists (TM)
-threshold <- (ncol(allGenotypes) - 1) - 67 # make a threshold where 67 loci needs to be similar between samples
-mlg.filter(genotypeGencln, distance = BearDist(allGenotypes)) <- 48 # threshold # collapse based on threshold, using BearDists (TM)
+system.time(calculatedDistances <- BearDist(presentGenotypes)) # calculate BearDists (TM)
+saveRDS(calculatedDistances, file = "calculatedDistances.rds") # save calculated distances
+calculatedDistances # print BearDists (TM)
+hist(calculatedDistances) # histogram of BearDists (TM)
+threshold <- (ncol(presentGenotypes) - 1) - 67 # make a threshold where 67 loci needs to be similar between samples
+mlg.filter(genotypeGencln, distance = calculatedDistances) <- threshold # collapse based on threshold, using BearDists (TM)
 genotypeGencln
 mll(genotypeGencln)
 
@@ -69,3 +101,17 @@ uniqueSamples <- rownames(gtAndSnps)[match(unique(gtAndSnps$genotypes), gtAndSnp
 # 4. check if collapsed genotypes contain a sample with an existing ind-name, if so add new ones to database under that name
 # 5. if individuals do not exist, add them to database with new names.
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
