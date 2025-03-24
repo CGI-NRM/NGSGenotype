@@ -14,26 +14,17 @@ library(ShortRead)
 library(wesanderson)
 source("genotyping_functions.r")
 
-### R version (slower, but all in R):
-# - List files:
-filteredFolder <- "./Filtered_data/SNP_filtered/"
-inputFiles <- list.files(filteredFolder, pattern = ".fastq.gz")
-
-# - Generate cutoffs:
-locusCutoffs <- GenerateCutoffs(minReads = 10, minPerc = 20)
-# locusCutoffs$`locus name` <- c(10, 10) # add 'locus name' and its designated cutoffs
-
-# - Load all samples and calculate all loci:
-locusNames <- readLines("bear_snp_loci.csv") # if loci are to be in a specific order, load this
-# - locusNames <- c() # if loci order does not matter, uncomment this this
-allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs, locusNames)
-
-### Python version (faster, but run ultimate_locus_parser.py/loop_over_chunks.sh first (see readme)):
-# - List files:
+# List files:
 snpCsvFiles <- list.files("Genotyped_SNPs/", pattern = ".csv", full.names = TRUE)
+
+# Load csv files into a list of dataframes:
 loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
-allGenotypes <- do.call(rbind, loadedFiles) # row bind all separate dataframes into one
-allGenotypes[is.na(allGenotypes)] <- '' # remove NA values
+
+# Row bind all separate dataframes into one:
+allGenotypes <- do.call(rbind, loadedFiles)
+
+# Replace NA values:
+allGenotypes[is.na(allGenotypes)] <- ''
 ```
 
 # Filter samples and loci:
