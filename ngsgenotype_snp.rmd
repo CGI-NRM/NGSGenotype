@@ -29,32 +29,37 @@ allGenotypes[is.na(allGenotypes)] <- ''
 
 # Filter samples and loci:
 ```{r}
-GenotypeFiltering <- function(inGenotypes, cutOff = 20) { # edge case: if a sample has 0% missing data while also having 21 cases of the exact same allele composition it will also be filtered out.
-  filteredGenotypes <- inGenotypes[!grepl("NEGATIVE|POSITIVE", inGenotypes$Sample), ]
-  filteredGenotypes <- filteredGenotypes[unlist(lapply(apply(filteredGenotypes[, -c(1)], 1, table), `[[`, 1)) <= cutOff, ] # check how many nothing values
-  saveRDS(filteredGenotypes, file = "filteredGenotypes.rds")
-  rejectedGenotypes <- inGenotypes[unlist(lapply(apply(inGenotypes[, -c(1)], 1, table), `[[`, 1)) > cutOff, ]
-  rejectedGenotypes <- rbind(rejectedGenotypes, inGenotypes[grepl("NEGATIVE|POSITIVE", inGenotypes$Sample), ])
-  saveRDS(rejectedGenotypes, file = "rejectedGenotypes.rds")
-  outGT <- list()
-  outGT$filtered <- filteredGenotypes
-  outGT$rejected <- rejectedGenotypes
-  return(outGT)
+GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, createRDS = FALSE, rdsName = "filteredGenotypes.rds") {
+  nLoci <- ncol(inGenotypes) - 1
+  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
+  filteredGenotypes <- inGenotypes[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent), ]
+  filteredGenotypes <- filteredGenotypes[apply(filteredGenotypes, 1, sumEmpties) >= (nLoci - maxPresent), ]
+  if(createRDS == TRUE) {
+    saveRDS(filteredGenotypes, file = rdsName)
+  }
+  return(filteredGenotypes)
 }
 
+# Remove controls:
+sampleGenotypes <- allGenotypes[!grepl("NEGATIVE|POSITIVE", allGenotypes$Sample), ]
+
 # Filter out sex loci:
-autoGenotypes <- allGenotypes[, !grepl("Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x", colnames(allGenotypes))]
+sexString <- "Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x|Ua-snp-236-x"
+autoGenotypes <- sampleGenotypes[, !grepl(sexString, colnames(sampleGenotypes))]
 saveRDS(autoGenotypes, file = "autoGenotypes.rds")
-sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl("Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x", colnames(allGenotypes))])
+sexGenotypes <- cbind(Sample = sampleGenotypes$Sample, sampleGenotypes[, grepl(sexString, colnames(sampleGenotypes))])
 saveRDS(sexGenotypes, file = "sexGenotypes.rds")
 
-# Filter out samples with less than 66 working loci:
-filterOutput <- GenotypeFiltering(autoGenotypes)
-filteredGenotypes <- filterOutput$filtered
-rejectedGenotypes <- filterOutput$rejected
+# Filter away meat samples:
+scatGenotypes <- autoGenotypes[!grepl("^M|^VLT", autoGenotypes$Sample),]
+
+# Filter out samples with minimum 75/67 working loci as well as the rejected ones:
+filteredGenotypes75 <- GenotypeFiltering(scatGenotypes, minPresent = 75, createRDS = TRUE, rdsName = "filteredGenotypes75.rds")
+filteredGenotypes67 <- GenotypeFiltering(scatGenotypes, minPresent = 67, maxPresent = 74, createRDS = FALSE)
+rejectedGenotypes <- GenotypeFiltering(scatGenotypes, minPresent = 0, maxPresent = 66, createRDS = TRUE, rdsName = "rejectedGenotypes.rds")
 
 # Filter out empty loci:
-presentGenotypes <- filteredGenotypes[, !lapply(filteredGenotypes, unique) == '']
+presentGenotypes <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique) == ''] # does this matter with allelematch?
 ```
 
 # Collapse samples to individuals:
