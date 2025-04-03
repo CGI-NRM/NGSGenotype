@@ -64,38 +64,29 @@ presentGenotypes <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique) =
 
 # Collapse samples to individuals:
 ```{r}
-# Load libraries:
-library(poppr)
-library(adegenet)
+library(allelematch)
+
+SplitLocus <- function(x, dataSet) {
+  columnName <- colnames(dataSet)[x]
+  print(columnName)
+  twoCols <- do.call(rbind, strsplit(dataSet[, x], ""))
+  colnames(twoCols) <- c(paste0(columnName, "1"), paste0(columnName, "2"))
+  return(twoCols)
+}
+
+# Split loci into two columns:
+splittingGTs <- presentGenotypes
+splittingGTs[splittingGTs == ''] <- "NN" # change missing data to NN
+splitDataset <- cbind(Sample = splittingGTs$Sample, do.call(cbind, lapply(1:ncol(splittingGTs[, -c(1)]), SplitLocus, splittingGTs[, -c(1)])))
 
 # Load data:
-genotypeGenind <- adegenet::df2genind(presentGenotypes[, -c(1)], ploidy = 2, ind.names = presentGenotypes$Sample, sep = "")
-genotypeGenind
-genotypeGencln <- poppr::as.genclone(genotypeGenind)
-genotypeGencln
+snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
+bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
 
-# Collapse genotypes:
-mll(genotypeGencln) <- "original" # reset genotypes
-system.time(calculatedDistances <- BearDist(presentGenotypes)) # calculate BearDists (TM)
-saveRDS(calculatedDistances, file = "calculatedDistances.rds") # save calculated distances
-calculatedDistances # print BearDists (TM)
-hist(calculatedDistances) # histogram of BearDists (TM)
-threshold <- (ncol(presentGenotypes) - 1) - 67 # make a threshold where 67 loci needs to be similar between samples
-mlg.filter(genotypeGencln, distance = calculatedDistances) <- threshold # collapse based on threshold, using BearDists (TM)
-genotypeGencln
-mll(genotypeGencln)
-
-# Assign genotypes:
-gtAndSnps <- as.data.frame(cbind(genotypes = genotypeGencln@mlg@mlg$contracted, genotypeGencln$tab)) # add genotypes to SNP table
-uniqueSamples <- rownames(gtAndSnps)[match(unique(gtAndSnps$genotypes), gtAndSnps$genotypes)] # take first sample of each genotype
-# Pull those samples from the sample sheets
-
-# Mockup:
-# 1. add a column to the "database" with ind-names
-# 2. load the "database" (without ind-names) and new samples together
-# 3. collapse individuals (will collapse the new ones to an existing genotype)
-# 4. check if collapsed genotypes contain a sample with an existing ind-name, if so add new ones to database under that name
-# 5. if individuals do not exist, add them to database with new names.
+# Find optimal mismatch parameters:
+amProfileSplit <- allelematch::amUniqueProfile(amDatasetFocal = snpLoadedSplit, multilocusMap = bearAlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
+uniqueBears <- allelematch::amUnique(snpLoadedSplit, multilocusMap = bearAlleleKey, alleleMismatch = 13) # change 13 to what amUniqueProfile picks
+allelematch::summary.amUnique(object = uniqueBears, html = "unique_bears_75_13.html") # generate report
 ```
 
 
