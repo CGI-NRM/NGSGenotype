@@ -84,9 +84,10 @@ snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missi
 bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
 
 # Find optimal mismatch parameters:
-amProfileSplit <- allelematch::amUniqueProfile(amDatasetFocal = snpLoadedSplit, multilocusMap = bearAlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
-uniqueBears <- allelematch::amUnique(snpLoadedSplit, multilocusMap = bearAlleleKey, alleleMismatch = 13) # change 13 to what amUniqueProfile picks
-allelematch::summary.amUnique(object = uniqueBears, html = "unique_bears_75_13.html") # generate report
+amProfileSplit <- allelematch::amUniqueProfile(amDatasetFocal = snpLoadedSplit, multilocusMap = bearAlleleKey, doPlot = TRUE, alleleMismatch = c(0:45))
+mmCutoff <- amProfileSplit$alleleMismatch[amProfileSplit$guessOptimum] # get estimated best mismatch threshold
+uniqueBears <- allelematch::amUnique(snpLoadedSplit, multilocusMap = bearAlleleKey, alleleMismatch = mmCutoff)
+allelematch::summary.amUnique(object = uniqueBears, html = paste0("unique_bears_75_", mmCutoff, ".html")) # generate report
 ```
 
 
