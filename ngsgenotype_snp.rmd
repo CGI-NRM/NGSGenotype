@@ -7,42 +7,40 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Detect and load files:
+# Detect, load and clean files and genotypes:
 ```{r}
 # Load libraries:
 library(ShortRead)
 library(wesanderson)
 source("genotyping_functions.r")
 
-# List files:
+# Load all samples: # some negatives and positives are summarized if they are named the same
 snpCsvFiles <- list.files("Genotyped_SNPs/", pattern = ".csv", full.names = TRUE)
-
-# Load csv files into a list of dataframes:
 loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
-
-# Row bind all separate dataframes into one:
 allGenotypes <- do.call(rbind, loadedFiles)
-
-# Replace NA values:
 allGenotypes[is.na(allGenotypes)] <- ''
+
+# Remove controls:
+removedSampleInfo <- list(startNumber = nrow(allGenotypes)) # does not include some duplicates which were removed in genotyping
+removedSampleInfo$nControls <- sum(grepl("NEGATIVE|POSITIVE", allGenotypes$Sample))
+sampleGenotypes <- allGenotypes[!grepl("NEGATIVE|POSITIVE", allGenotypes$Sample), ]
+
+# Fix sample name:
+sampleGenotypes$Sample <- toupper(sampleGenotypes$Sample)
+# sampleGenotypes$Sample[grepl("^M", sampleGenotypes$Sample)] <- substr(sampleGenotypes$Sample[grepl("^M", sampleGenotypes$Sample)], 1, 7)
+
+# Remove duplicates:
+removedSampleInfo$nDuplicated <- sum(duplicated(sampleGenotypes$Sample))
+# print(sampleGenotypes$Sample[duplicated(sampleGenotypes$Sample)]) # all names that are duplicates of other names
+sampleGenotypes <- sampleGenotypes[!duplicated(sampleGenotypes$Sample), ] # only keep the first of duplicated names
+# or:
+# allGenotypes$Sample <- make.names(allGenotypes$Sample, unique = TRUE) # give duplications unique names
+
+# Remove based on 
 ```
 
 # Filter samples and loci:
 ```{r}
-GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, createRDS = FALSE, rdsName = "filteredGenotypes.rds") {
-  nLoci <- ncol(inGenotypes) - 1
-  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
-  filteredGenotypes <- inGenotypes[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent), ]
-  filteredGenotypes <- filteredGenotypes[apply(filteredGenotypes, 1, sumEmpties) >= (nLoci - maxPresent), ]
-  if(createRDS == TRUE) {
-    saveRDS(filteredGenotypes, file = rdsName)
-  }
-  return(filteredGenotypes)
-}
-
-# Remove controls:
-sampleGenotypes <- allGenotypes[!grepl("NEGATIVE|POSITIVE", allGenotypes$Sample), ]
-
 # Filter out sex loci:
 sexString <- "Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x|Ua-snp-236-x"
 autoGenotypes <- sampleGenotypes[, !grepl(sexString, colnames(sampleGenotypes))]
@@ -50,16 +48,20 @@ saveRDS(autoGenotypes, file = "autoGenotypes.rds")
 sexGenotypes <- cbind(Sample = sampleGenotypes$Sample, sampleGenotypes[, grepl(sexString, colnames(sampleGenotypes))])
 saveRDS(sexGenotypes, file = "sexGenotypes.rds")
 
-# Filter away meat samples:
-scatGenotypes <- autoGenotypes[!grepl("^M|^VLT", autoGenotypes$Sample),]
+# Filter out samples with minimum 75/67 working loci:
+filteredGenotypes75 <- GenotypeFiltering(autoGenotypes, minPresent = 75, createRDS = TRUE, rdsName = "filteredGenotypes75.rds")
+filteredGenotypes67 <- GenotypeFiltering(autoGenotypes, minPresent = 67, maxPresent = 74, createRDS = FALSE)
+filteredGenotypesAll <- GenotypeFiltering(autoGenotypes, minPresent = 67, createRDS = FALSE)
 
-# Filter out samples with minimum 75/67 working loci as well as the rejected ones:
-filteredGenotypes75 <- GenotypeFiltering(scatGenotypes, minPresent = 75, createRDS = TRUE, rdsName = "filteredGenotypes75.rds")
-filteredGenotypes67 <- GenotypeFiltering(scatGenotypes, minPresent = 67, maxPresent = 74, createRDS = FALSE)
-rejectedGenotypes <- GenotypeFiltering(scatGenotypes, minPresent = 0, maxPresent = 66, createRDS = TRUE, rdsName = "rejectedGenotypes.rds")
+# Filter out rejected genotypes:
+rejectedGenotypes <- GenotypeFiltering(autoGenotypes, minPresent = 0, maxPresent = 66, createRDS = TRUE, rdsName = "rejectedGenotypes.rds")
+removedSampleInfo$nLowQuality <- nrow(rejectedGenotypes)
+filteredGenotypes00 <- GenotypeFiltering(autoGenotypes, minPresent = 0, maxPresent = 23, createRDS = FALSE)
+filteredGenotypes24 <- GenotypeFiltering(autoGenotypes, minPresent = 24, maxPresent = 66, createRDS = FALSE)
 
 # Filter out empty loci:
-presentGenotypes <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique) == ''] # does this matter with allelematch?
+presentGenotypes75 <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique) == ''] # does this matter with allelematch?
+presentGenotypesAll <- filteredGenotypesAll[, !lapply(filteredGenotypesAll, unique) == ''] # does this matter with allelematch?
 ```
 
 # Collapse samples to individuals:

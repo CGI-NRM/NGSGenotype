@@ -1,5 +1,20 @@
 printprint <- function(i = '') { print(paste0("print('", i, "')"))}
 
+GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, createRDS = FALSE, rdsName = "filteredGenotypes.rds") {
+  nLoci <- ncol(inGenotypes) - 1
+  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
+  
+  filteredGenotypes <- inGenotypes[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent), ]
+  filteredGenotypes <- filteredGenotypes[apply(filteredGenotypes, 1, sumEmpties) >= (nLoci - maxPresent), ]
+  
+  if(createRDS == TRUE) {
+    saveRDS(filteredGenotypes, file = rdsName)
+  }
+  return(filteredGenotypes)
+}
+
+### DEPRECATED FUNCTIONS ###
+
 CompareBears <- function(bear1Data, bear2Data, nLoci) { # count matching loci between two bears
   simSum <- sum(bear1Data == bear2Data, na.rm = TRUE) # number of shared alleles between the two samples
   return(nLoci - simSum) # return number of non shared alleles between the two samples
