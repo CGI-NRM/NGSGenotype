@@ -13,7 +13,7 @@ GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, 
   return(filteredGenotypes)
 }
 
-### DEPRECATED FUNCTIONS ###
+### THE FOLLOWING FUNCTIONS ARE DEPRECATED ###
 
 CompareBears <- function(bear1Data, bear2Data, nLoci) { # count matching loci between two bears
   simSum <- sum(bear1Data == bear2Data, na.rm = TRUE) # number of shared alleles between the two samples

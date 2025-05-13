@@ -64,7 +64,7 @@ presentGenotypes75 <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique)
 presentGenotypesAll <- filteredGenotypesAll[, !lapply(filteredGenotypesAll, unique) == ''] # does this matter with allelematch?
 ```
 
-# Collapse samples to individuals:
+# Collapse samples to individuals based on high quality samples (>= 75 working loci):
 ```{r}
 library(allelematch)
 
@@ -76,20 +76,31 @@ SplitLocus <- function(x, dataSet) {
   return(twoCols)
 }
 
-# Split loci into two columns:
-splittingGTs <- presentGenotypes
-splittingGTs[splittingGTs == ''] <- "NN" # change missing data to NN
-splitDataset <- cbind(Sample = splittingGTs$Sample, do.call(cbind, lapply(1:ncol(splittingGTs[, -c(1)]), SplitLocus, splittingGTs[, -c(1)])))
+LoadAMData <- function(inData) {
+  # Split loci into two columns:
+  inData[inData == ''] <- "NN" # change missing data to NN
+  splitDataset <- cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)])))
+  
+  # Load data:
+  snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
+  bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
+  return(list(Data = snpLoadedSplit, AlleleKey = bearAlleleKey))
+}
 
-# Load data:
-snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
-bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
+# Load data into allelematch:
+loadedData75 <- LoadAMData(presentGenotypes75)
 
-# Find optimal mismatch parameters:
-amProfileSplit <- allelematch::amUniqueProfile(amDatasetFocal = snpLoadedSplit, multilocusMap = bearAlleleKey, doPlot = TRUE, alleleMismatch = c(0:45))
-mmCutoff <- amProfileSplit$alleleMismatch[amProfileSplit$guessOptimum] # get estimated best mismatch threshold
-uniqueBears <- allelematch::amUnique(snpLoadedSplit, multilocusMap = bearAlleleKey, alleleMismatch = mmCutoff)
-allelematch::summary.amUnique(object = uniqueBears, html = paste0("unique_bears_75_", mmCutoff, ".html")) # generate report
+# Find optimal mismatch parameters (optional):
+amProfile75 <- allelematch::amUniqueProfile(amDatasetFocal = loadedData75$Data, multilocusMap = loadedData75$AlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
+saveRDS(amProfile75, file = "amProfile75.rds")
+mmCutoff <- amProfile75$alleleMismatch[amProfile75$guessOptimum]
+
+# Cluster samples with allelematch:
+# uniqueBears75 <- allelematch::amUnique(loadedData75$Data, multilocusMap = loadedData75$AlleleKey, alleleMismatch = mmCutoff) # uncomment if using calculated cutoff
+uniqueBears75 <- allelematch::amUnique(loadedData75$Data, multilocusMap = loadedData75$AlleleKey, alleleMismatch = 10) # changed cutoff to 10 to be more stringent
+saveRDS(uniqueBears75, file = "uniqueBears75_10.rds")
+allelematch::summary.amUnique(object = uniqueBears75, html = "unique_bears_75_10_v1.html")
+allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_v1.csv")
 ```
 
 
