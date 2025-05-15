@@ -13,6 +13,25 @@ GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, 
   return(filteredGenotypes)
 }
 
+SplitLocus <- function(x, dataSet) {
+  columnName <- colnames(dataSet)[x]
+  print(columnName)
+  twoCols <- do.call(rbind, strsplit(dataSet[, x], ""))
+  colnames(twoCols) <- c(paste0(columnName, "1"), paste0(columnName, "2"))
+  return(twoCols)
+}
+
+LoadAMData <- function(inData) {
+  # Split loci into two columns:
+  inData[inData == ''] <- "NN" # change missing data to NN
+  splitDataset <- cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)])))
+  
+  # Load data:
+  snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
+  bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
+  return(list(Data = snpLoadedSplit, AlleleKey = bearAlleleKey))
+}
+
 ### THE FOLLOWING FUNCTIONS ARE DEPRECATED ###
 
 CompareBears <- function(bear1Data, bear2Data, nLoci) { # count matching loci between two bears
