@@ -84,7 +84,62 @@ allelematch::summary.amUnique(object = uniqueBears75, html = "unique_bears_75_10
 allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_v1.csv")
 ```
 
+# Cluster all working samples (>= 67 working loci) idientify samples/clusters to be dropped:
+```{r}
+# Create vector of high quality samples to be removed:
+rmSamples75 <- c()
 
+# Unmatched (not different enough to be their own individuals and not similar enough to anything else). Remove:
+View(data.frame(Sample = uniqueBears75$unclassified$index, uniqueBears75$unclassified$multilocus))
+rmSamples75 <- c(rmSamples75, uniqueBears75$unclassified$index)
+
+# Matches several genotypes. Remove:
+View(data.frame(Sample = uniqueBears75$multipleMatches$index, uniqueBears75$multipleMatches$multilocus))
+rmSamples75 <- c(rmSamples75, uniqueBears75$multipleMatches$index)
+
+# Record number of samples removed:
+removedSampleInfo$nUncMultm75 <- length(rmSamples75)
+
+# Cluster all except the removed samples:
+loadedDataAll <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% rmSamples75),])
+uniqueBearsAll <- allelematch::amUnique(loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, alleleMismatch = 10) # use stringent 10
+allelematch::summary.amUnique(object = uniqueBearsAll, html = "unique_bears_all_10_v1.html")
+allelematch::summary.amUnique(object = uniqueBearsAll, csv = "unique_bears_all_10_v1.csv")
+
+# get all clusters from both runs:
+clustersAll <- lapply(uniqueBearsAll$pairwise, function(x) {x$match$index})
+clusters75 <- lapply(uniqueBears75$pairwise, function(x) {x$match$index})
+
+# check each one and see if they contain any matched sample from '75' run, note all samples in any who doesn't
+GetOrphans <- function(hiqClusters, allClusters, rmSamplesHiq) {
+  realClusters <- 0
+  rmSamples <- c()
+  clusteredHiq <- unique(do.call(c, hiqClusters))
+  clusteredHiq <- clusteredHiq[!(clusteredHiq %in% rmSamplesHiq)] # remove samples in supplied remove vector
+  for(curCluster in allClusters) {
+    if(any(curCluster %in% clusteredHiq)) {
+      realClusters <- realClusters + 1
+    } else {
+      rmSamples <- c(rmSamples, curCluster)
+      # print(curCluster %in% rmSamples)
+    }
+  }
+  rmSamplesFull <- c(rmSamples, rmSamplesHiq) # add condemned samples from supplied vector
+  return(list(numClusters = realClusters, oldRmSamples = unique(rmSamplesHiq), newRmSamples = unique(rmSamples), updatedRmList = unique(rmSamplesFull)))
+}
+
+# Add unclassified and multiplematched samples from all run to the untrusted samples and record them:
+rmSamplesPre <- c(rmSamples75, uniqueBearsAll$unclassified$index, uniqueBearsAll$multipleMatches$index)
+removedSampleInfo$nUncMultmAll <- length(c(uniqueBearsAll$unclassified$index, uniqueBearsAll$multipleMatches$index))
+
+# Get orphaned samples and record them:
+orphanData <- GetOrphans(hiqClusters = clusters75, allClusters = clustersAll, rmSamplesHiq = rmSamplesPre)
+print(orphanData$numClusters) # number of real clusters
+length(orphanData$newRmSamples) # number of newly added samples to be removed
+length(orphanData$updatedRmList) # number of samples to be removed
+removedSampleInfo$nOrphaned <- length(unique(orphanData$newRmSamples))
+rmSamplesAll <- orphanData$updatedRmList
+```
 
 
 
