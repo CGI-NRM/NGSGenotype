@@ -84,7 +84,7 @@ allelematch::summary.amUnique(object = uniqueBears75, html = "unique_bears_75_10
 allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_v1.csv")
 ```
 
-# Cluster all working samples (>= 67 working loci)i and identify samples/clusters to be removed:
+# Cluster all working samples (>= 67 working loci) and identify samples/clusters to be removed:
 ```{r}
 # Create vector of high quality samples to be removed:
 rmSamples75 <- c()
