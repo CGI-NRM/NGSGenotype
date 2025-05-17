@@ -84,7 +84,7 @@ allelematch::summary.amUnique(object = uniqueBears75, html = "unique_bears_75_10
 allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_v1.csv")
 ```
 
-# Cluster all working samples (>= 67 working loci) idientify samples/clusters to be dropped:
+# Cluster all working samples (>= 67 working loci)i and identify samples/clusters to be removed:
 ```{r}
 # Create vector of high quality samples to be removed:
 rmSamples75 <- c()
@@ -141,8 +141,33 @@ removedSampleInfo$nOrphaned <- length(unique(orphanData$newRmSamples))
 rmSamplesAll <- orphanData$updatedRmList
 ```
 
+# Recluster without samples chosen to be removed:
+```{r}
+library(readxl)
 
+# Import file with samples to be manually removed (optional):
+manualRmFile <- "../list_of_samples.xlsx" # specify file with samples to be removed
+geoProblems <- ifelse(manualRmFile %in% list.dirs('.'), readxl::read_excel(manualRmFile), data.frame(SEP = c()))
+removedSampleInfo$nManualRm <- sum(!(geoProblems$SEP %in% rmSamplesAll))
+rmSamplesAll <- unique(c(rmSamplesAll, geoProblems$SEP)) # problematic that rmSamplesAll is reused here
 
+# Rerun analysis without noted samples:
+loadedDataFilt <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% rmSamplesAll),])
+uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
+
+# Identify orphans, uncalssified and  multiple matches:
+clustersFilt <- lapply(uniqueBearsFilt$pairwise, function(x) {x$match$index}) # get clusters from filt run
+rmSamplesFilt <- c(rmSamplesAll, uniqueBearsFilt$unclassified$index, uniqueBearsFilt$multipleMatches$index)
+orphanDataFilt <- GetOrphans(hiqClusters = clusters75, allClusters = clustersFilt, rmSamplesHiq = rmSamplesFilt)
+removedSampleInfo$nOrphaned <- sum(removedSampleInfo$nOrphaned, length(unique(orphanDataFilt$newRmSamples))) # add orphans to the pile
+removedSampleInfo$nUncMultmFilt <- length(c(uniqueBearsFilt$unclassified$index, uniqueBearsFilt$multipleMatches$index))
+
+# Rerun again without all samples chosen to be removed
+loadedDataFilt <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% orphanDataFilt$updatedRmList),])
+uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
+allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.html")
+allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.csv")
+```
 
 
 
