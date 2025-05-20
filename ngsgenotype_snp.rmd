@@ -71,8 +71,10 @@ library(allelematch)
 # Load data into allelematch:
 loadedData75 <- LoadAMData(presentGenotypes75)
 
-# Find optimal mismatch parameters (optional):
+# Find optimal mismatch parameters (optional to use) and save plot:
+{png(file="amUniqueProfile_plot_75.png", width = 689, height = 425)
 amProfile75 <- allelematch::amUniqueProfile(amDatasetFocal = loadedData75$Data, multilocusMap = loadedData75$AlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
+dev.off()}
 saveRDS(amProfile75, file = "amProfile75.rds")
 mmCutoff <- amProfile75$alleleMismatch[amProfile75$guessOptimum]
 
