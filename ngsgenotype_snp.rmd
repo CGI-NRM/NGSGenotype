@@ -10,66 +10,70 @@ knitr::opts_chunk$set(echo = TRUE)
 # Detect, load and clean files and genotypes:
 ```{r}
 # Load libraries:
+library(tidyverse)
 library(ShortRead)
 library(wesanderson)
 source("genotyping_functions.r")
 
-# Load all samples: # some negatives and positives are summarized if they are named the same
-snpCsvFiles <- list.files("Genotyped_SNPs/", pattern = ".csv", full.names = TRUE)
-loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
-allGenotypes <- do.call(rbind, loadedFiles)
-allGenotypes[is.na(allGenotypes)] <- ''
+ParseGenotypes <- function(genotypePath = "Genotyped_SNPs/") {
+  snpCsvFiles <- list.files(genotypePath, pattern = ".csv", full.names = TRUE)
+  loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
+  loadedGenotypes <- cbind(Status = 'Loaded', do.call(rbind, loadedFiles))
+  loadedGenotypes[is.na(loadedGenotypes)] <- ''
+  loadedGenotypes$Sample <- toupper(loadedGenotypes$Sample)
+  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls
+  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names
+  return(loadedGenotypes)
+}
 
-# Remove controls:
-removedSampleInfo <- list(startNumber = nrow(allGenotypes)) # does not include some duplicates which were removed in genotyping
-removedSampleInfo$nControls <- sum(grepl("NEGATIVE|POSITIVE", allGenotypes$Sample))
-sampleGenotypes <- allGenotypes[!grepl("NEGATIVE|POSITIVE", allGenotypes$Sample), ]
-
-# Fix sample name:
-sampleGenotypes$Sample <- toupper(sampleGenotypes$Sample)
-# sampleGenotypes$Sample[grepl("^M", sampleGenotypes$Sample)] <- substr(sampleGenotypes$Sample[grepl("^M", sampleGenotypes$Sample)], 1, 7)
-
-# Remove duplicates:
-removedSampleInfo$nDuplicated <- sum(duplicated(sampleGenotypes$Sample))
-# print(sampleGenotypes$Sample[duplicated(sampleGenotypes$Sample)]) # all names that are duplicates of other names
-sampleGenotypes <- sampleGenotypes[!duplicated(sampleGenotypes$Sample), ] # only keep the first of duplicated names
-# or:
-# allGenotypes$Sample <- make.names(allGenotypes$Sample, unique = TRUE) # give duplications unique names
-
-# Remove based on 
+# Load all samples and mark controls and duplicates: # some negatives and positives are summarized if they are named the same(?)
+allGenotypes <- ParseGenotypes(genotypePath = "Genotyped_SNPs/")
 ```
 
-# Filter samples and loci:
+# Filter/QC samples and loci:
 ```{r}
 # Filter out sex loci:
 sexString <- "Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x|Ua-snp-236-x"
-autoGenotypes <- sampleGenotypes[, !grepl(sexString, colnames(sampleGenotypes))]
+autoGenotypes <- allGenotypes[, !grepl(sexString, colnames(allGenotypes))]
 saveRDS(autoGenotypes, file = "autoGenotypes.rds")
-sexGenotypes <- cbind(Sample = sampleGenotypes$Sample, sampleGenotypes[, grepl(sexString, colnames(sampleGenotypes))])
+sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl(sexString, colnames(allGenotypes))])
 saveRDS(sexGenotypes, file = "sexGenotypes.rds")
 
-# Filter out samples with minimum 75/67 working loci:
-filteredGenotypes75 <- GenotypeFiltering(autoGenotypes, minPresent = 75, createRDS = TRUE, rdsName = "filteredGenotypes75.rds")
-filteredGenotypes67 <- GenotypeFiltering(autoGenotypes, minPresent = 67, maxPresent = 74, createRDS = FALSE)
-filteredGenotypesAll <- GenotypeFiltering(autoGenotypes, minPresent = 67, createRDS = FALSE)
+QCMarking <- function(inGenotypes, minPresent = 75, maxPresent = 10000, targetStatus = c(""), newStatus = "Pass") {
+  nLoci <- ncol(inGenotypes) - 2
+  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
+  inGenotypes$Status[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent) & apply(inGenotypes, 1, sumEmpties) >= (nLoci - maxPresent) & grepl(paste(targetStatus, sep = "|"), inGenotypes$Status)] <- newStatus
+  return(inGenotypes)
+}
 
-# Filter out rejected genotypes:
-rejectedGenotypes <- GenotypeFiltering(autoGenotypes, minPresent = 0, maxPresent = 66, createRDS = TRUE, rdsName = "rejectedGenotypes.rds")
-removedSampleInfo$nLowQuality <- nrow(rejectedGenotypes)
-filteredGenotypes00 <- GenotypeFiltering(autoGenotypes, minPresent = 0, maxPresent = 23, createRDS = FALSE)
-filteredGenotypes24 <- GenotypeFiltering(autoGenotypes, minPresent = 24, maxPresent = 66, createRDS = FALSE)
+QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loaded"), newStatus = "High Quality") %>%
+  QCMarking(minPresent = 67, maxPresent = 74, targetStatus = c("Loaded"), newStatus = "Medium Quality") %>%
+  QCMarking(minPresent = 24, maxPresent = 66, targetStatus = c("Loaded"), newStatus = "Low Quality") %>%
+  QCMarking(minPresent = 00, maxPresent = 23, targetStatus = c("Loaded"), newStatus = "Fail Quality") # perhaps use a more comprehensive function and collapse this into one line
 
-# Filter out empty loci:
-presentGenotypes75 <- filteredGenotypes75[, !lapply(filteredGenotypes75, unique) == ''] # does this matter with allelematch?
-presentGenotypesAll <- filteredGenotypesAll[, !lapply(filteredGenotypesAll, unique) == ''] # does this matter with allelematch?
+QCGenotypes <- QCGenotypes[, !lapply(QCGenotypes, unique) == ''] # does this matter with allelematch?
 ```
 
 # Collapse samples to individuals based on high quality samples (>= 75 working loci):
 ```{r}
 library(allelematch)
 
+LoadAMData2 <- function(inData, targetStatus = c("")) {
+  # Prepare data (filter by targeted sample status and remove status column):
+  inData <- inData[grepl(paste(targetStatus, sep = "|"), inData$Status), -c(1)]
+  
+  # Split loci into two columns:
+  inData[inData == ''] <- "NN" # change missing data to NN
+  splitDataset <- cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)])))
+  
+  # Load data:
+  snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
+  bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
+  return(list(Data = snpLoadedSplit, AlleleKey = bearAlleleKey))
+}
+
 # Load data into allelematch:
-loadedData75 <- LoadAMData(presentGenotypes75)
+loadedData75 <- LoadAMData2(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more worknig loci
 
 # Find optimal mismatch parameters (optional to use) and save plot:
 {png(file="amUniqueProfile_plot_75.png", width = 689, height = 425)
@@ -170,12 +174,4 @@ uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = lo
 allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.html")
 allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.csv")
 ```
-
-
-
-
-
-
-
-
 
