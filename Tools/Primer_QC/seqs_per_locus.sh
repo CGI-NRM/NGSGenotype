@@ -6,7 +6,7 @@ for locus in $loci
 do
   target_files=`ls $1/*$3* | grep $locus`
   n_seqs=`zgrep "^@" $target_files | wc -l`
-  if [[ $n_seqs -gt $2 ]]
+  if [[ $n_seqs -gt $(($2 - 1)) ]]
   then
     echo "$locus $n_seqs"
   fi
