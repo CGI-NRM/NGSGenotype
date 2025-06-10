@@ -51,8 +51,6 @@ QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loade
   QCMarking(minPresent = 67, maxPresent = 74, targetStatus = c("Loaded"), newStatus = "Medium Quality") %>%
   QCMarking(minPresent = 24, maxPresent = 66, targetStatus = c("Loaded"), newStatus = "Low Quality") %>%
   QCMarking(minPresent = 00, maxPresent = 23, targetStatus = c("Loaded"), newStatus = "Fail Quality") # perhaps use a more comprehensive function and collapse this into one line
-
-QCGenotypes <- QCGenotypes[, !lapply(QCGenotypes, unique) == ''] # does this matter with allelematch?
 ```
 
 # Collapse samples to individuals based on high quality samples (>= 75 working loci):
@@ -61,11 +59,12 @@ library(allelematch)
 
 LoadAMData2 <- function(inData, targetStatus = c("")) {
   # Prepare data (filter by targeted sample status and remove status column):
-  inData <- inData[grepl(paste(targetStatus, sep = "|"), inData$Status), -c(1)]
+  inData <- inData[, !lapply(inData, unique) == ''] # does this matter with allelematch?
+  inData <- inData[grepl(do.call(paste, c(as.list(targetStatus), sep = "|")), inData$Status), -c(1)]
   
   # Split loci into two columns:
   inData[inData == ''] <- "NN" # change missing data to NN
-  splitDataset <- cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)])))
+  splitDataset <- as.data.frame(cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)]))))
   
   # Load data:
   snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
@@ -74,14 +73,16 @@ LoadAMData2 <- function(inData, targetStatus = c("")) {
 }
 
 # Load data into allelematch:
-loadedData75 <- LoadAMData2(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more worknig loci
+loadedData75 <- LoadAMData2(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more working loci
+
+# if an allele is fixed you can get an error here: 'x' must be atomic
 
 # Find optimal mismatch parameters (optional to use) and save plot:
 {png(file="amUniqueProfile_plot_75.png", width = 689, height = 425)
 amProfile75 <- allelematch::amUniqueProfile(amDatasetFocal = loadedData75$Data, multilocusMap = loadedData75$AlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
-dev.off()}
+dev.off()
 saveRDS(amProfile75, file = "amProfile75.rds")
-mmCutoff <- amProfile75$alleleMismatch[amProfile75$guessOptimum]
+mmCutoff <- amProfile75$alleleMismatch[amProfile75$guessOptimum]}
 
 # Cluster samples with allelematch:
 # uniqueBears75 <- allelematch::amUnique(loadedData75$Data, multilocusMap = loadedData75$AlleleKey, alleleMismatch = mmCutoff) # uncomment if using calculated cutoff
