@@ -94,22 +94,19 @@ allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_
 
 # Cluster all working samples (>= 67 working loci) and identify samples/clusters to be removed:
 ```{r}
-# Create vector of high quality samples to be removed:
-rmSamples75 <- c()
+# Make new object:
+processedGenotypes <- QCGenotypes
 
 # Unmatched (not different enough to be their own individuals and not similar enough to anything else). Remove:
 View(data.frame(Sample = uniqueBears75$unclassified$index, uniqueBears75$unclassified$multilocus))
-rmSamples75 <- c(rmSamples75, uniqueBears75$unclassified$index)
+processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBears75$unclassified$index] <- "Unclassified"
 
 # Matches several genotypes. Remove:
 View(data.frame(Sample = uniqueBears75$multipleMatches$index, uniqueBears75$multipleMatches$multilocus))
-rmSamples75 <- c(rmSamples75, uniqueBears75$multipleMatches$index)
-
-# Record number of samples removed:
-removedSampleInfo$nUncMultm75 <- length(rmSamples75)
+processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBears75$multipleMatches$index] <- "MultipleMatched"
 
 # Cluster all except the removed samples:
-loadedDataAll <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% rmSamples75),])
+loadedDataAll <- LoadAMData2(processedGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsAll <- allelematch::amUnique(loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, alleleMismatch = 10) # use stringent 10
 allelematch::summary.amUnique(object = uniqueBearsAll, html = "unique_bears_all_10_v1.html")
 allelematch::summary.amUnique(object = uniqueBearsAll, csv = "unique_bears_all_10_v1.csv")
@@ -136,17 +133,16 @@ GetOrphans <- function(hiqClusters, allClusters, rmSamplesHiq) {
   return(list(numClusters = realClusters, oldRmSamples = unique(rmSamplesHiq), newRmSamples = unique(rmSamples), updatedRmList = unique(rmSamplesFull)))
 }
 
-# Add unclassified and multiplematched samples from all run to the untrusted samples and record them:
-rmSamplesPre <- c(rmSamples75, uniqueBearsAll$unclassified$index, uniqueBearsAll$multipleMatches$index)
-removedSampleInfo$nUncMultmAll <- length(c(uniqueBearsAll$unclassified$index, uniqueBearsAll$multipleMatches$index))
+# Mark unclassified and multiplematched samples from all run:
+processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBearsAll$unclassified$index] <- "Unclassified"
+processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBearsAll$multipleMatches$index] <- "MultipleMatched"
 
 # Get orphaned samples and record them:
-orphanData <- GetOrphans(hiqClusters = clusters75, allClusters = clustersAll, rmSamplesHiq = rmSamplesPre)
+orphanData <- GetOrphans(hiqClusters = clusters75, allClusters = clustersAll, rmSamplesHiq = processedGenotypes$Sample[processedGenotypes$Status %in% c("Unclassified", "MultipleMatched")])
 print(orphanData$numClusters) # number of real clusters
 length(orphanData$newRmSamples) # number of newly added samples to be removed
 length(orphanData$updatedRmList) # number of samples to be removed
-removedSampleInfo$nOrphaned <- length(unique(orphanData$newRmSamples))
-rmSamplesAll <- orphanData$updatedRmList
+processedGenotypes$Status[processedGenotypes$Sample %in% orphanData$newRmSamples] <- "Orphan"
 ```
 
 # Recluster without samples chosen to be removed:
