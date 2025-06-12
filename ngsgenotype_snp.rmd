@@ -149,27 +149,31 @@ processedGenotypes$Status[processedGenotypes$Sample %in% orphanData$newRmSamples
 ```{r}
 library(readxl)
 
+finalGenotypes <- processedGenotypes
+
 # Import file with samples to be manually removed (optional):
-manualRmFile <- "../list_of_samples.xlsx" # specify file with samples to be removed
+manualRmFile <- "../list_of_samples.xlsx" # specify file with samples to be removed in a column names 'SEP'
 geoProblems <- ifelse(manualRmFile %in% list.dirs('.'), readxl::read_excel(manualRmFile), data.frame(SEP = c()))
-removedSampleInfo$nManualRm <- sum(!(geoProblems$SEP %in% rmSamplesAll))
-rmSamplesAll <- unique(c(rmSamplesAll, geoProblems$SEP)) # problematic that rmSamplesAll is reused here
+finalGenotypes$Status[finalGenotypes$Sample %in% geoProblems$SEP] <- "Manual Removal"
 
 # Rerun analysis without noted samples:
-loadedDataFilt <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% rmSamplesAll),])
+loadedDataFilt <- LoadAMData2(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
 
-# Identify orphans, uncalssified and  multiple matches:
+# Identify orphans, uncalssified and multiple matches:
 clustersFilt <- lapply(uniqueBearsFilt$pairwise, function(x) {x$match$index}) # get clusters from filt run
-rmSamplesFilt <- c(rmSamplesAll, uniqueBearsFilt$unclassified$index, uniqueBearsFilt$multipleMatches$index)
-orphanDataFilt <- GetOrphans(hiqClusters = clusters75, allClusters = clustersFilt, rmSamplesHiq = rmSamplesFilt)
-removedSampleInfo$nOrphaned <- sum(removedSampleInfo$nOrphaned, length(unique(orphanDataFilt$newRmSamples))) # add orphans to the pile
-removedSampleInfo$nUncMultmFilt <- length(c(uniqueBearsFilt$unclassified$index, uniqueBearsFilt$multipleMatches$index))
+finalGenotypes$Status[finalGenotypes$Sample %in% uniqueBearsFilt$unclassified$index] <- "Unclassified"
+finalGenotypes$Status[finalGenotypes$Sample %in% uniqueBearsFilt$multipleMatches$index] <- "MultipleMatched"
+orphanDataFilt <- GetOrphans(hiqClusters = clusters75, allClusters = clustersFilt, rmSamplesHiq = processedGenotypes$Sample[processedGenotypes$Status %in% c("Unclassified", "MultipleMatched", "Manual Removal")])
+finalGenotypes$Status[finalGenotypes$Sample %in% orphanDataFilt$newRmSamples] <- "Orphan"
 
 # Rerun again without all samples chosen to be removed
-loadedDataFilt <- LoadAMData(presentGenotypesAll[!(presentGenotypesAll$Sample %in% orphanDataFilt$updatedRmList),])
+loadedDataFilt <- LoadAMData2(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
 allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.html")
-allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.csv")
+allelematch::summary.amUnique(object = uniqueBearsFilt, csv = "unique_bears_filt_10_v1.csv")
+
+table(finalGenotypes$Status) # summarise statuses of samples
+View(read.table("unique_bears_filt_10_v1.csv", sep = ",", header = TRUE))
 ```
 
