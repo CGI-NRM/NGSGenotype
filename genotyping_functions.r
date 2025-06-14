@@ -21,6 +21,13 @@ SplitLocus <- function(x, dataSet) {
   return(twoCols)
 }
 
+QCMarking <- function(inGenotypes, minPresent = 75, maxPresent = 10000, targetStatus = c(""), newStatus = "Pass") {
+  nLoci <- ncol(inGenotypes) - 2
+  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
+  inGenotypes$Status[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent) & apply(inGenotypes, 1, sumEmpties) >= (nLoci - maxPresent) & grepl(paste(targetStatus, sep = "|"), inGenotypes$Status)] <- newStatus
+  return(inGenotypes)
+}
+
 LoadAMData <- function(inData, targetStatus = c("")) {
   # Prepare data (filter by targeted sample status and remove status column):
   inData <- inData[, !lapply(inData, unique) == ''] # does this matter with allelematch?

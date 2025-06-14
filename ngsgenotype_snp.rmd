@@ -40,13 +40,7 @@ saveRDS(autoGenotypes, file = "autoGenotypes.rds")
 sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl(sexString, colnames(allGenotypes))])
 saveRDS(sexGenotypes, file = "sexGenotypes.rds")
 
-QCMarking <- function(inGenotypes, minPresent = 75, maxPresent = 10000, targetStatus = c(""), newStatus = "Pass") {
-  nLoci <- ncol(inGenotypes) - 2
-  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
-  inGenotypes$Status[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent) & apply(inGenotypes, 1, sumEmpties) >= (nLoci - maxPresent) & grepl(paste(targetStatus, sep = "|"), inGenotypes$Status)] <- newStatus
-  return(inGenotypes)
-}
-
+# Mark samples based on quality:
 QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loaded"), newStatus = "High Quality") %>%
   QCMarking(minPresent = 67, maxPresent = 74, targetStatus = c("Loaded"), newStatus = "Medium Quality") %>%
   QCMarking(minPresent = 24, maxPresent = 66, targetStatus = c("Loaded"), newStatus = "Low Quality") %>%
