@@ -15,7 +15,7 @@ GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, 
 
 SplitLocus <- function(x, dataSet) {
   columnName <- colnames(dataSet)[x]
-  print(columnName)
+  # print(columnName)
   twoCols <- do.call(rbind, strsplit(dataSet[, x], ""))
   colnames(twoCols) <- c(paste0(columnName, "1"), paste0(columnName, "2"))
   return(twoCols)
