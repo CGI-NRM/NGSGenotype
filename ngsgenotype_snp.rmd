@@ -15,17 +15,6 @@ library(ShortRead)
 library(wesanderson)
 source("genotyping_functions.r")
 
-ParseGenotypes <- function(genotypePath = "Genotyped_SNPs/") {
-  snpCsvFiles <- list.files(genotypePath, pattern = ".csv", full.names = TRUE)
-  loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
-  loadedGenotypes <- cbind(Status = 'Loaded', do.call(rbind, loadedFiles))
-  loadedGenotypes[is.na(loadedGenotypes)] <- ''
-  loadedGenotypes$Sample <- toupper(loadedGenotypes$Sample)
-  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls
-  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names
-  return(loadedGenotypes)
-}
-
 # Load all samples and mark controls and duplicates: # some negatives and positives are summarized if they are named the same(?)
 allGenotypes <- ParseGenotypes(genotypePath = "Genotyped_SNPs/")
 ```
