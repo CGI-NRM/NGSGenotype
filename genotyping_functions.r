@@ -19,8 +19,8 @@ ParseGenotypes <- function(genotypePath = "Genotyped_SNPs/") {
   loadedGenotypes <- cbind(Status = 'Loaded', do.call(rbind, loadedFiles))
   loadedGenotypes[is.na(loadedGenotypes)] <- ''
   loadedGenotypes$Sample <- toupper(loadedGenotypes$Sample)
-  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls
-  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names
+  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names # moved up
+  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls # moved down
   return(loadedGenotypes)
 }
 
