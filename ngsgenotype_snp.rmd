@@ -15,17 +15,6 @@ library(ShortRead)
 library(wesanderson)
 source("genotyping_functions.r")
 
-ParseGenotypes <- function(genotypePath = "Genotyped_SNPs/") {
-  snpCsvFiles <- list.files(genotypePath, pattern = ".csv", full.names = TRUE)
-  loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
-  loadedGenotypes <- cbind(Status = 'Loaded', do.call(rbind, loadedFiles))
-  loadedGenotypes[is.na(loadedGenotypes)] <- ''
-  loadedGenotypes$Sample <- toupper(loadedGenotypes$Sample)
-  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls
-  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names
-  return(loadedGenotypes)
-}
-
 # Load all samples and mark controls and duplicates: # some negatives and positives are summarized if they are named the same(?)
 allGenotypes <- ParseGenotypes(genotypePath = "Genotyped_SNPs/")
 ```
@@ -40,13 +29,7 @@ saveRDS(autoGenotypes, file = "autoGenotypes.rds")
 sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl(sexString, colnames(allGenotypes))])
 saveRDS(sexGenotypes, file = "sexGenotypes.rds")
 
-QCMarking <- function(inGenotypes, minPresent = 75, maxPresent = 10000, targetStatus = c(""), newStatus = "Pass") {
-  nLoci <- ncol(inGenotypes) - 2
-  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
-  inGenotypes$Status[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent) & apply(inGenotypes, 1, sumEmpties) >= (nLoci - maxPresent) & grepl(paste(targetStatus, sep = "|"), inGenotypes$Status)] <- newStatus
-  return(inGenotypes)
-}
-
+# Mark samples based on quality:
 QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loaded"), newStatus = "High Quality") %>%
   QCMarking(minPresent = 67, maxPresent = 74, targetStatus = c("Loaded"), newStatus = "Medium Quality") %>%
   QCMarking(minPresent = 24, maxPresent = 66, targetStatus = c("Loaded"), newStatus = "Low Quality") %>%

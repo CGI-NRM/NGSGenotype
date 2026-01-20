@@ -13,9 +13,27 @@ GenotypeFiltering <- function(inGenotypes, minPresent = 75, maxPresent = 10000, 
   return(filteredGenotypes)
 }
 
+ParseGenotypes <- function(genotypePath = "Genotyped_SNPs/") {
+  snpCsvFiles <- list.files(genotypePath, pattern = ".csv", full.names = TRUE)
+  loadedFiles <- lapply(snpCsvFiles, read.table, sep = ',', header = TRUE, check.names = FALSE)
+  loadedGenotypes <- cbind(Status = 'Loaded', do.call(rbind, loadedFiles))
+  loadedGenotypes[is.na(loadedGenotypes)] <- ''
+  loadedGenotypes$Sample <- toupper(loadedGenotypes$Sample)
+  loadedGenotypes$Status[grepl("NEGATIVE|POSITIVE", loadedGenotypes$Sample)] <- "Control" # mark controls
+  loadedGenotypes$Status[duplicated(loadedGenotypes$Sample)] <- "Duplicated" # mark duplications of names
+  return(loadedGenotypes)
+}
+
+QCMarking <- function(inGenotypes, minPresent = 75, maxPresent = 10000, targetStatus = c(""), newStatus = "Pass") {
+  nLoci <- ncol(inGenotypes) - 2
+  sumEmpties <- function(x) {return(sum(grepl("^$", x)))}
+  inGenotypes$Status[apply(inGenotypes, 1, sumEmpties) <= (nLoci - minPresent) & apply(inGenotypes, 1, sumEmpties) >= (nLoci - maxPresent) & grepl(paste(targetStatus, sep = "|"), inGenotypes$Status)] <- newStatus
+  return(inGenotypes)
+}
+
 SplitLocus <- function(x, dataSet) {
   columnName <- colnames(dataSet)[x]
-  print(columnName)
+  # print(columnName)
   twoCols <- do.call(rbind, strsplit(dataSet[, x], ""))
   colnames(twoCols) <- c(paste0(columnName, "1"), paste0(columnName, "2"))
   return(twoCols)
