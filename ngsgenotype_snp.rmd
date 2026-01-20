@@ -33,7 +33,8 @@ allGenotypes <- ParseGenotypes(genotypePath = "Genotyped_SNPs/")
 # Filter/QC samples and loci:
 ```{r}
 # Filter out sex loci:
-sexString <- "Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x|Ua-snp-236-x"
+# sexString <- "Ua-snp-01y|Ua-snp-02y|Ua-snp-03y|Ua-snp-04y|Ua-snp-196-x|Ua-snp-248-x|Ua-snp-236-x"
+sexString <- "X-*|Y-*"
 autoGenotypes <- allGenotypes[, !grepl(sexString, colnames(allGenotypes))]
 saveRDS(autoGenotypes, file = "autoGenotypes.rds")
 sexGenotypes <- cbind(Sample = allGenotypes$Sample, allGenotypes[, grepl(sexString, colnames(allGenotypes))])
