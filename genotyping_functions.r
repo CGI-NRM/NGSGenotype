@@ -21,10 +21,14 @@ SplitLocus <- function(x, dataSet) {
   return(twoCols)
 }
 
-LoadAMData <- function(inData) {
+LoadAMData <- function(inData, targetStatus = c("")) {
+  # Prepare data (filter by targeted sample status and remove status column):
+  inData <- inData[, !lapply(inData, unique) == ''] # does this matter with allelematch?
+  inData <- inData[grepl(do.call(paste, c(as.list(targetStatus), sep = "|")), inData$Status), -c(1)]
+  
   # Split loci into two columns:
   inData[inData == ''] <- "NN" # change missing data to NN
-  splitDataset <- cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)])))
+  splitDataset <- as.data.frame(cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)]))))
   
   # Load data:
   snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")

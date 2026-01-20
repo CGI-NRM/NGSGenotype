@@ -57,23 +57,8 @@ QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loade
 ```{r}
 library(allelematch)
 
-LoadAMData2 <- function(inData, targetStatus = c("")) {
-  # Prepare data (filter by targeted sample status and remove status column):
-  inData <- inData[, !lapply(inData, unique) == ''] # does this matter with allelematch?
-  inData <- inData[grepl(do.call(paste, c(as.list(targetStatus), sep = "|")), inData$Status), -c(1)]
-  
-  # Split loci into two columns:
-  inData[inData == ''] <- "NN" # change missing data to NN
-  splitDataset <- as.data.frame(cbind(Sample = inData$Sample, do.call(cbind, lapply(1:ncol(inData[, -c(1)]), SplitLocus, inData[, -c(1)]))))
-  
-  # Load data:
-  snpLoadedSplit <- allelematch::amDataset(multilocusDataset = splitDataset, missingCode = "N", indexColumn = "Sample")
-  bearAlleleKey <- rep(1:(ncol(splitDataset[, -c(1)]) / 2), each = 2)
-  return(list(Data = snpLoadedSplit, AlleleKey = bearAlleleKey))
-}
-
 # Load data into allelematch:
-loadedData75 <- LoadAMData2(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more working loci
+loadedData75 <- LoadAMData(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more working loci
 
 # if an allele is fixed you can get an error here: 'x' must be atomic
 
@@ -106,7 +91,7 @@ View(data.frame(Sample = uniqueBears75$multipleMatches$index, uniqueBears75$mult
 processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBears75$multipleMatches$index] <- "MultipleMatched"
 
 # Cluster all except the removed samples:
-loadedDataAll <- LoadAMData2(processedGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
+loadedDataAll <- LoadAMData(processedGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsAll <- allelematch::amUnique(loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, alleleMismatch = 10) # use stringent 10
 allelematch::summary.amUnique(object = uniqueBearsAll, html = "unique_bears_all_10_v1.html")
 allelematch::summary.amUnique(object = uniqueBearsAll, csv = "unique_bears_all_10_v1.csv")
@@ -157,7 +142,7 @@ geoProblems <- ifelse(manualRmFile %in% list.dirs('.'), readxl::read_excel(manua
 finalGenotypes$Status[finalGenotypes$Sample %in% geoProblems$SEP] <- "Manual Removal"
 
 # Rerun analysis without noted samples:
-loadedDataFilt <- LoadAMData2(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
+loadedDataFilt <- LoadAMData(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
 
 # Identify orphans, uncalssified and multiple matches:
@@ -168,7 +153,7 @@ orphanDataFilt <- GetOrphans(hiqClusters = clusters75, allClusters = clustersFil
 finalGenotypes$Status[finalGenotypes$Sample %in% orphanDataFilt$newRmSamples] <- "Orphan"
 
 # Rerun again without all samples chosen to be removed
-loadedDataFilt <- LoadAMData2(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
+loadedDataFilt <- LoadAMData(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
 uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
 allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.html")
 allelematch::summary.amUnique(object = uniqueBearsFilt, csv = "unique_bears_filt_10_v1.csv")
