@@ -36,59 +36,37 @@ QCGenotypes <- QCMarking(autoGenotypes, minPresent = 75, targetStatus = c("Loade
   QCMarking(minPresent = 00, maxPresent = 23, targetStatus = c("Loaded"), newStatus = "Fail Quality") # perhaps use a more comprehensive function and collapse this into one line
 ```
 
-# Collapse samples to individuals based on high quality samples (>= 75 working loci):
+# Cluster all working samples (>= 67 working loci) and identify samples/clusters to be removed:
 ```{r}
 library(allelematch)
 
-# Load data into allelematch:
-loadedData75 <- LoadAMData(QCGenotypes, targetStatus = c("High Quality")) # Load all samples with 75 or more working loci
-
-# if an allele is fixed you can get an error here: 'x' must be atomic
-
-# Find optimal mismatch parameters (optional to use) and save plot:
-{png(file="amUniqueProfile_plot_75.png", width = 689, height = 425)
-amProfile75 <- allelematch::amUniqueProfile(amDatasetFocal = loadedData75$Data, multilocusMap = loadedData75$AlleleKey, doPlot = TRUE, alleleMismatch = c(0:45)) # 13 is the best
-dev.off()
-saveRDS(amProfile75, file = "amProfile75.rds")
-mmCutoff <- amProfile75$alleleMismatch[amProfile75$guessOptimum]}
-
-# Cluster samples with allelematch:
-# uniqueBears75 <- allelematch::amUnique(loadedData75$Data, multilocusMap = loadedData75$AlleleKey, alleleMismatch = mmCutoff) # uncomment if using calculated cutoff
-uniqueBears75 <- allelematch::amUnique(loadedData75$Data, multilocusMap = loadedData75$AlleleKey, alleleMismatch = 10) # changed cutoff to 10 to be more stringent
-saveRDS(uniqueBears75, file = "uniqueBears75_10.rds")
-allelematch::summary.amUnique(object = uniqueBears75, html = "unique_bears_75_10_v1.html")
-allelematch::summary.amUnique(object = uniqueBears75, csv = "unique_bears_75_10_v1.csv")
-```
-
-# Cluster all working samples (>= 67 working loci) and identify samples/clusters to be removed:
-```{r}
 # Make new object:
 processedGenotypes <- QCGenotypes
 
-# Unmatched (not different enough to be their own individuals and not similar enough to anything else). Remove:
-View(data.frame(Sample = uniqueBears75$unclassified$index, uniqueBears75$unclassified$multilocus))
-processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBears75$unclassified$index] <- "Unclassified"
-
-# Matches several genotypes. Remove:
-View(data.frame(Sample = uniqueBears75$multipleMatches$index, uniqueBears75$multipleMatches$multilocus))
-processedGenotypes$Status[processedGenotypes$Sample %in% uniqueBears75$multipleMatches$index] <- "MultipleMatched"
-
-# Cluster all except the removed samples:
+# Cluster all samples with sufficient quality:
 loadedDataAll <- LoadAMData(processedGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
-uniqueBearsAll <- allelematch::amUnique(loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, alleleMismatch = 10) # use stringent 10
-allelematch::summary.amUnique(object = uniqueBearsAll, html = "unique_bears_all_10_v1.html")
-allelematch::summary.amUnique(object = uniqueBearsAll, csv = "unique_bears_all_10_v1.csv")
+
+{png(file="amUniqueProfile_plot_All.png", width = 689, height = 425)
+amProfileAll <- allelematch::amUniqueProfile(amDatasetFocal = loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, doPlot = TRUE, alleleMismatch = c(0:45))
+dev.off()
+saveRDS(amProfileAll, file = "amProfileAll.rds")
+mmCutoff <- amProfileAll$alleleMismatch[amProfileAll$guessOptimum]}
+
+uniqueBearsAll <- allelematch::amUnique(loadedDataAll$Data, multilocusMap = loadedDataAll$AlleleKey, alleleMismatch = mmCutoff)
+allelematch::summary.amUnique(object = uniqueBearsAll, html = paste0("unique_bears_all_", mmCutoff, "_v1.html"))
+allelematch::summary.amUnique(object = uniqueBearsAll, csv = paste0("unique_bears_all_", mmCutoff, "_v1.csv"))
 
 # get all clusters from both runs:
 clustersAll <- lapply(uniqueBearsAll$pairwise, function(x) {x$match$index})
-clusters75 <- lapply(uniqueBears75$pairwise, function(x) {x$match$index})
+clusters75 <- processedGenotypes$Sample[processedGenotypes$Status == "High Quality"]
 
 # check each one and see if they contain any matched sample from '75' run, note all samples in any who doesn't
 GetOrphans <- function(hiqClusters, allClusters, rmSamplesHiq) {
   realClusters <- 0
   rmSamples <- c()
-  clusteredHiq <- unique(do.call(c, hiqClusters))
-  clusteredHiq <- clusteredHiq[!(clusteredHiq %in% rmSamplesHiq)] # remove samples in supplied remove vector
+  # clusteredHiq <- unique(do.call(c, hiqClusters))
+  # clusteredHiq <- clusteredHiq[!(clusteredHiq %in% rmSamplesHiq)] # remove samples in supplied remove vector
+  clusteredHiq <- hiqClusters
   for(curCluster in allClusters) {
     if(any(curCluster %in% clusteredHiq)) {
       realClusters <- realClusters + 1
@@ -126,9 +104,9 @@ finalGenotypes$Status[finalGenotypes$Sample %in% geoProblems$SEP] <- "Manual Rem
 
 # Rerun analysis without noted samples:
 loadedDataFilt <- LoadAMData(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
-uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
+uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = mmCutoff) # use stringent 10
 
-# Identify orphans, uncalssified and multiple matches:
+# Identify orphans, unclassified and multiple matches:
 clustersFilt <- lapply(uniqueBearsFilt$pairwise, function(x) {x$match$index}) # get clusters from filt run
 finalGenotypes$Status[finalGenotypes$Sample %in% uniqueBearsFilt$unclassified$index] <- "Unclassified"
 finalGenotypes$Status[finalGenotypes$Sample %in% uniqueBearsFilt$multipleMatches$index] <- "MultipleMatched"
@@ -137,11 +115,10 @@ finalGenotypes$Status[finalGenotypes$Sample %in% orphanDataFilt$newRmSamples] <-
 
 # Rerun again without all samples chosen to be removed
 loadedDataFilt <- LoadAMData(finalGenotypes, targetStatus = c("Medium Quality", "High Quality")) # Load all samples with 67 or more working loci
-uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = 10) # use stringent 10
-allelematch::summary.amUnique(object = uniqueBearsFilt, html = "unique_bears_filt_10_v1.html")
-allelematch::summary.amUnique(object = uniqueBearsFilt, csv = "unique_bears_filt_10_v1.csv")
+uniqueBearsFilt <- allelematch::amUnique(loadedDataFilt$Data, multilocusMap = loadedDataFilt$AlleleKey, alleleMismatch = mmCutoff) # use stringent 10
+allelematch::summary.amUnique(object = uniqueBearsFilt, html = paste0("unique_bears_filt_", mmCutoff, "_v1.html"))
+allelematch::summary.amUnique(object = uniqueBearsFilt, csv = paste0("unique_bears_filt_", mmCutoff, "_v1.csv"))
 
 table(finalGenotypes$Status) # summarise statuses of samples
-View(read.table("unique_bears_filt_10_v1.csv", sep = ",", header = TRUE))
+View(uniqueBearsFilt)
 ```
-
