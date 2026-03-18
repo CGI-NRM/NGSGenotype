@@ -75,6 +75,8 @@ FragLength <- function(sample, primerF = "AAAAA", primerR = "AAAAA", range = 0:1
   tabl <- table(lengthTot)
   if(length(tabl) > 8) {
     tabl <- sort(tabl, decreasing = TRUE)[1:8]
+  } else if(length(tabl) == 0) {
+    tabl <- table(c(0, 0))
   }
   # tabl <- as.table(tabl[tabl > cutoff * sum(tabl)])
   names(attributes(tabl)$dimnames) <- "AlleleLength"
@@ -119,7 +121,7 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000)
                   main = unlist(i[2]),
                   xlab = "0/0")
           outputDF[dfRow, 1] <- unlist(i[2])
-          outputDF[dfRow, 2:3] <- c(NA,NA)
+          outputDF[dfRow, 2:3] <- c(0, 0)
     } else {
       primerName <- unlist(strsplit(unlist(i[2]), "_"))[1]
       primerFR <- primerInfo[, colnames(primerInfo) == primerName]
@@ -135,7 +137,7 @@ PlotAllSamples <- function(loadedFiles, writeTo, primerInfo, fragRange = 0:1000)
             message('An Error Occurred')
             print(e)
             outputDF[dfRow,1] <- unlist(i[2])
-            outputDF[dfRow, 2:3] <- c(NA,NA)
+            outputDF[dfRow, 2:3] <- c(0, 0)
         },
         #if a warning occurs, tell me the warning
         warning=function(w) {
@@ -185,5 +187,5 @@ allGenotypes <- RunAllLoci(inputFiles, filteredFolder, locusCutoffs)
 
 # Write all genotypes to an excel-sheet:
 library(writexl)
-write_xlsx(x = allGenotypes, path = "all_735_genotypes.xlsx")
+write_xlsx(x = allGenotypes, path = "all_XYZ_genotypes.xlsx")
 ```
