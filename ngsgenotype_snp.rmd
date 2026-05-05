@@ -122,3 +122,32 @@ allelematch::summary.amUnique(object = uniqueBearsFilt, csv = paste0("unique_bea
 table(finalGenotypes$Status) # summarise statuses of samples
 View(uniqueBearsFilt)
 ```
+
+# Calculate sex and generate statistics output:
+```{r}
+sexGenotypes$Status <- finalGenotypes$Status[match(sexGenotypes$Sample, finalGenotypes$Sample)]
+sexDetClusters <- sexGenotypes[sexGenotypes$Status %in% c("Medium Quality", "High Quality"),]
+sexDetClusters$Cluster <- bearsFiltResult$uniqueIndex[match(sexDetClusters$Sample, bearsFiltResult$matchIndex)]
+
+SexChooser <- function(clusterName, inputDF, minimumX = 1, minimumY = 3) {
+  curMarkers <- inputDF[inputDF$Cluster == clusterName, ]
+  curMarkers[rowSums(curMarkers[grep("^X", colnames(curMarkers))] == "") == 3, ] <- "" #rep("", ncol(curMarkers))
+  presentX <- any(rowSums(curMarkers[grep("^X", colnames(curMarkers))] != "") >= minimumX)
+  presentY <- any(rowSums(curMarkers[grep("^Y", colnames(curMarkers))] != "") >= minimumY)
+  if(presentY) {
+    SNPSex <- "Hane"
+  } else if(presentX) {
+    SNPSex <- "Hona"
+  } else {
+    SNPSex <- "Obestämd"
+  }
+  return(data.frame(Cluster = clusterName, SNP_sex = SNPSex))
+}
+
+bearSexList <- lapply(unique(sexDetClusters$Cluster), SexChooser, sexDetClusters, minimumX = 1, minimumY = 3) # minimum 1 X to get determined, minimum 3 Y to be a male
+bearSexSummary <- do.call(rbind, bearSexList)
+sexDetClusters$SNP_Sex <- bearSexSummary$SNP_sex[match(sexDetClusters$Cluster, bearSexSummary$Cluster)]
+table(sexDetClusters$SNP_Sex) # summarise sex of samples
+statisticsOutFile <- cbind(sexDetClusters[, -c(8)], QCGenotypes[match(sexDetClusters$Sample, QCGenotypes$Sample), -c(1, 2)]) 
+writexl::write_xlsx(x = statisticsOutFile, path = "clustered_bear_samples_id_sex_genotypes_v1.xlsx")
+```
